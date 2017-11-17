@@ -1,27 +1,68 @@
 """This pollination analysis is guided by this doc https://docs.google.com/document/d/1k5yyhisemNrjG7ZSFGfD7GbIGY3rcNWmNulL2Hcqr9Q/edit"""
 import os
 import logging
+import subprocess
 
 from osgeo import osr
 from osgeo import gdal
 import taskgraph
 import pygeoprocessing
 import numpy
+import pandas
 
 
 logging.basicConfig(
     format='%(asctime)s %(name)-10s %(levelname)-8s %(message)s',
     level=logging.DEBUG, datefmt='%m/%d/%Y %H:%M:%S ')
 
-BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis"
+LUH2_BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis\LUH2_1KM"
 WORKSPACE_DIR = 'pollination_workspace'
+CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
 GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
 
+BASE_CROP_DATA_DIR = r"C:\Users\Rich\Dropbox\Monfreda maps"
+POL_DEP_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "poll_dep.csv")
 
 NODATA = -9999
 
 # any proportion of ag above this is ag
 CROP_THRESHOLD_VALUE = 0.5
+
+
+def asc_to_tiff(base_path, target_path):
+    """Convert base .asc.zip to target .tif w/ a WGS84 coordinate system."""
+    tmp_asc_path = os.path.splitext(base_path)[0]
+    if not os.path.exists(os.path.dirname(target_path)):
+        os.makedirs(os.path.dirname(target_path))
+    cmd = 'unzip -o "%s" -d "%s"' % (
+        base_path, os.path.dirname(base_path))
+    print cmd
+    subprocess.call(cmd)
+    with open(tmp_asc_path, 'rb') as base_file:
+        for _ in xrange(6):
+            base_file.readline()
+        array = numpy.empty((2160, 4320), dtype=numpy.float32)
+        running_array = []
+        for line in base_file:
+            running_array += [float(x) for x in ' '.join(line.split()).split()]
+        print len(running_array), 2160*4320
+        array[:] = numpy.array(
+            [float(x) for x in running_array]).reshape(2160, 4320)
+    os.remove(tmp_asc_path)
+    driver = gdal.GetDriverByName('GTiff')
+    target_raster = driver.Create(
+        target_path.encode('utf-8'), 4320, 2160, 1, gdal.GDT_Float32,
+        options=GTIFF_CREATION_OPTIONS)
+    target_projection = osr.SpatialReference()
+    target_projection.ImportFromEPSG(4326)
+    target_raster.SetProjection(target_projection.ExportToWkt())
+    target_raster.SetGeoTransform([-180.0000, 8.3333001E-02, 0, 90.00000, 0, -8.3333001E-02])
+    target_band = target_raster.GetRasterBand(1)
+    target_band.SetNoDataValue(-9999.0)
+    target_band.WriteArray(array)
+    target_band.FlushCache()
+    target_band = None
+    target_raster = None
 
 
 def threshold_crop_raster(array):
@@ -90,24 +131,67 @@ def main():
     if not os.path.exists(WORKSPACE_DIR):
         os.makedirs(WORKSPACE_DIR)
 
+    task_graph = taskgraph.TaskGraph(
+        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 4)
+
+    pol_dependence_table = pandas.read_csv(POL_DEP_TABLE_PATH)
+
+    pol_dep_crop_table = (
+        pol_dependence_table.loc[
+            pol_dependence_table['prop_poll_dep'] != 0])
+    dep_pol_id_map = dict(zip(
+        pol_dep_crop_table['crop_id'],
+        pol_dep_crop_table['prop_poll_dep']))
+
+    crop_yield_path_id_map = dict(
+        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, "%s_yield.asc.zip" % crop_id))
+         for crop_id in dep_pol_id_map])
+
+    crop_area_path_id_map = dict(
+        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, "%s_harea.asc.zip" % crop_id))
+         for crop_id in dep_pol_id_map])
+
+    crop_yield_task_id_map = {}
+    crop_area_task_id_map = {}
+    for crop_id in dep_pol_id_map:
+        base_crop_yield_path = crop_yield_path_id_map[crop_id]
+        target_crop_yield_path = os.path.join(
+            CROP_FILE_DIR, os.path.basename(
+                base_crop_yield_path).split('.')[0] + '.tif')
+        crop_yield_path_id_map[crop_id] = target_crop_yield_path
+        crop_yield_task_id_map[crop_id] = task_graph.add_task(
+            func=asc_to_tiff,
+            args=(base_crop_yield_path, target_crop_yield_path),
+            target_path_list=[target_crop_yield_path])
+
+        base_crop_area_path = crop_area_path_id_map[crop_id]
+        target_crop_area_path = os.path.join(
+            CROP_FILE_DIR, os.path.basename(
+                base_crop_area_path).split('.')[0] + '.tif')
+        crop_area_path_id_map[crop_id] = target_crop_area_path
+        crop_area_task_id_map[crop_id] = task_graph.add_task(
+            func=asc_to_tiff,
+            args=(base_crop_area_path, target_crop_area_path),
+            target_path_list=[target_crop_area_path])
+
     crop_path_list = [
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "c3ann.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "c3nfx.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "c3per.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "c4ann.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "c4per.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c3ann.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c3nfx.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c3per.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c4ann.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c4per.flt"),
     ]
 
     habitat_path_list = [
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "primf.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "primn.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "secdf.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "secdn.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "primf.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "primn.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "secdf.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "secdn.flt"),
     ]
 
     grass_path_list = [
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "pastr.flt"),
-        os.path.join(BASE_DATA_DIR, "LUH2_1KM", "range.flt")
+        os.path.join(LUH2_BASE_DATA_DIR, "pastr.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "range.flt")
     ]
 
     ag_proportion_path = os.path.join(WORKSPACE_DIR, 'ag_proportion.tif')
@@ -117,9 +201,6 @@ def main():
         'nathabgrass': os.path.join(
             WORKSPACE_DIR, 'nathabgrass_proportion.tif'),
     }
-
-    task_graph = taskgraph.TaskGraph(
-        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 4)
 
     sumtask_id_map = {}
     for raster_path_list, target_path, task_id in [

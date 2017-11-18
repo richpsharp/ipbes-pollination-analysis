@@ -50,7 +50,9 @@ def asc_to_tiff(base_path, target_path):
         running_array = []
         for line in base_file:
             running_array += [float(x) for x in ' '.join(line.split()).split()]
-        print len(running_array), 2160*4320
+        # this is hard-coded from the Montfrida maps so putting assert here
+        # in case I blindly copy it somewhere else someday
+        assert(len(running_array) == 2160*4320)
         array[:] = numpy.array(
             [float(x) for x in running_array]).reshape(2160, 4320)
     os.remove(tmp_asc_path)
@@ -61,9 +63,10 @@ def asc_to_tiff(base_path, target_path):
     target_projection = osr.SpatialReference()
     target_projection.ImportFromEPSG(4326)
     target_raster.SetProjection(target_projection.ExportToWkt())
-    target_raster.SetGeoTransform([-180.0000, 8.3333001E-02, 0, 90.00000, 0, -8.3333001E-02])
+    target_raster.SetGeoTransform([
+        -180.0000, 8.3333001E-02, 0, 90.00000, 0, -8.3333001E-02])
     target_band = target_raster.GetRasterBand(1)
-    target_band.SetNoDataValue(-9999.0)
+    target_band.SetNoDataValue(NODATA)
     target_band.WriteArray(array)
     target_band.FlushCache()
     target_band = None
@@ -126,35 +129,29 @@ def step_kernel(n_pixels, kernel_filepath):
     kernel_dataset.SetProjection(srs.ExportToWkt())
 
     kernel_band = kernel_dataset.GetRasterBand(1)
-    kernel_band.SetNoDataValue(-9999)
+    kernel_band.SetNoDataValue(NODATA)
     kernel_band.Fill(1)
 
 
-class TotalYieldOp(object):
+class MultRastersAndScalar(object):
     def __init__(
-            self, base_crop_area_path, base_crop_yield_path,
-            frac_refuse, target_total_yield_path):
+            self, base_raster_path_list, scalar, target_path):
         try:
             self.__name__ = hashlib.sha1(inspect.getsource(
-                TotalYieldOp.__call__)).hexdigest()
+                MultRastersAndScalar.__call__)).hexdigest()
         except IOError:
             # default to the classname if it doesn't work
-            self.__name__ = TotalYieldOp.__name__
+            self.__name__ = MultRastersAndScalar.__name__
         self.__name__ += str([
-            base_crop_area_path, base_crop_yield_path,
-            frac_refuse, target_total_yield_path])
+            base_raster_path_list, scalar, target_path])
 
-        self.base_crop_yield_path = base_crop_yield_path
-        self.base_crop_area_path = base_crop_area_path
-        self.target_total_yield_path = target_total_yield_path
-        self.frac_refuse = frac_refuse
+        self.base_raster_path_list = base_raster_path_list
+        self.target_path = target_path
+        self.scalar = scalar
 
     def __call__(self):
 
-        yield_proportion = 1.0 - self.frac_refuse
-
-        def mult_arrays_const(array_a, array_b):
-            array_list = [array_a, array_b]
+        def mult_arrays_scalar(*array_list):
             stack = numpy.stack(array_list)
             valid_mask = (
                 numpy.bitwise_and.reduce(stack != NODATA, axis=0))
@@ -164,15 +161,14 @@ class TotalYieldOp(object):
                 len(array_list), n_valid)
             result = numpy.empty(array_list[0].shape, dtype=numpy.float32)
             result[:] = NODATA
-            result[valid_mask] = yield_proportion * numpy.prod(
+            result[valid_mask] = self.scalar * numpy.prod(
                 valid_stack, axis=0)
             return result
 
         pygeoprocessing.raster_calculator(
-            [(self.base_crop_area_path, 1),
-             (self.base_crop_yield_path, 1)],
-            mult_arrays_const, self.target_total_yield_path,
-            gdal.GDT_Float32, -9999,
+            [(x, 1) for x in self.base_raster_path_list],
+            mult_arrays_scalar, self.target_path,
+            gdal.GDT_Float32, NODATA,
             gtiff_creation_options=GTIFF_CREATION_OPTIONS)
 
 
@@ -186,8 +182,9 @@ def main():
 
     crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 
-    crop_table = crop_table[
-        pandas.notnull(crop_table['crop'])]
+    # this filters out the first partially blank row that's used for unit
+    # notation
+    crop_table = crop_table[pandas.notnull(crop_table['crop'])]
 
     dep_pol_id_map = dict(zip(
         crop_table['crop'],
@@ -233,15 +230,44 @@ def main():
             target_path_list=[target_crop_area_path])
 
         total_yield_task = task_graph.add_task(
-            func=TotalYieldOp(
-                target_crop_area_path, target_crop_yield_path,
-                proportion_refuse_crop_map[crop_id],
-                target_crop_total_yield_path_id_map[crop_id]),
+            func=MultRastersAndScalar(
+                [target_crop_area_path, target_crop_yield_path],
+                target_crop_total_yield_path_id_map[crop_id],
+                1.0-proportion_refuse_crop_map[crop_id]),
             target_path_list=[target_crop_total_yield_path_id_map[crop_id]],
             dependent_task_list=[
                 crop_area_task_id_map[crop_id],
                 crop_yield_task_id_map[crop_id]]
             )
+
+        for micronutrient_id in ['Energy', 'VitA', 'Fe', 'Folate']:
+            target_micronutrient_path = os.path.splitext(
+                target_crop_total_yield_path_id_map[crop_id])[0] + (
+                    '_%s.tif' % (micronutrient_id))
+
+            # the 1e4 converts the Mg to g for nutrient units
+            micronutrient_task = task_graph.add_task(
+                func=MultRastersAndScalar(
+                    [target_crop_total_yield_path_id_map[crop_id]],
+                    1e4 * float(crop_table[crop_table['crop'] == crop_id][
+                        micronutrient_id]),
+                    target_micronutrient_path),
+                target_path_list=[target_micronutrient_path],
+                dependent_task_list=[total_yield_task]
+                )
+
+            target_pollinator_dependent_micronutrient_path = os.path.splitext(
+                target_micronutrient_path)[0] + '_%s.tif' % '_pol_dep'
+            pollinator_dependent_micronutrient_task = task_graph.add_task(
+                func=MultRastersAndScalar(
+                    [target_micronutrient_path],
+                    float(crop_table[
+                        crop_table['crop'] == crop_id]['pol_dep']),
+                    target_pollinator_dependent_micronutrient_path),
+                target_path_list=[
+                    target_pollinator_dependent_micronutrient_path],
+                dependent_task_list=[total_yield_task]
+                )
 
     """Proportion of micronutrient production dependent on pollination
         For each crop (at 10 km):
@@ -288,7 +314,7 @@ def main():
             func=pygeoprocessing.raster_calculator,
             args=(
                 [(x, 1) for x in raster_path_list], add_arrays, target_path,
-                gdal.GDT_Float32, -9999),
+                gdal.GDT_Float32, NODATA),
             kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
             target_path_list=[target_path]
             )
@@ -354,7 +380,7 @@ def main():
                 [(classified_ag_path, 1),
                  (hab_in_2km_path_id_map[hab_id], 1)],
                 mult_arrays, masked_hab_path_id_map[hab_id],
-                gdal.GDT_Float32, -9999),
+                gdal.GDT_Float32, NODATA),
             kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
             target_path_list=[masked_hab_path_id_map[hab_id]],
             dependent_task_list=[

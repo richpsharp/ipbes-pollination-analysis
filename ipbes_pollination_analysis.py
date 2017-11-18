@@ -2,6 +2,8 @@
 import os
 import logging
 import subprocess
+import hashlib
+import inspect
 
 from osgeo import osr
 from osgeo import gdal
@@ -15,13 +17,14 @@ logging.basicConfig(
     format='%(asctime)s %(name)-10s %(levelname)-8s %(message)s',
     level=logging.DEBUG, datefmt='%m/%d/%Y %H:%M:%S ')
 
+
 LUH2_BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis\LUH2_1KM"
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = r"C:\Users\Rich\Dropbox\Monfreda maps"
-
-CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
-MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
 CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "crop_info.csv")
+
+TARGET_CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
+TARGET_MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
 
 GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
 
@@ -127,6 +130,52 @@ def step_kernel(n_pixels, kernel_filepath):
     kernel_band.Fill(1)
 
 
+class TotalYieldOp(object):
+    def __init__(
+            self, base_crop_area_path, base_crop_yield_path,
+            frac_refuse, target_total_yield_path):
+        try:
+            self.__name__ = hashlib.sha1(inspect.getsource(
+                TotalYieldOp.__call__)).hexdigest()
+        except IOError:
+            # default to the classname if it doesn't work
+            self.__name__ = TotalYieldOp.__name__
+        self.__name__ += str([
+            base_crop_area_path, base_crop_yield_path,
+            frac_refuse, target_total_yield_path])
+
+        self.base_crop_yield_path = base_crop_yield_path
+        self.base_crop_area_path = base_crop_area_path
+        self.target_total_yield_path = target_total_yield_path
+        self.frac_refuse = frac_refuse
+
+    def __call__(self):
+
+        yield_proportion = 1.0 - self.frac_refuse
+
+        def mult_arrays_const(array_a, array_b):
+            array_list = [array_a, array_b]
+            stack = numpy.stack(array_list)
+            valid_mask = (
+                numpy.bitwise_and.reduce(stack != NODATA, axis=0))
+            n_valid = numpy.count_nonzero(valid_mask)
+            broadcast_valid_mask = numpy.broadcast_to(valid_mask, stack.shape)
+            valid_stack = stack[broadcast_valid_mask].reshape(
+                len(array_list), n_valid)
+            result = numpy.empty(array_list[0].shape, dtype=numpy.float32)
+            result[:] = NODATA
+            result[valid_mask] = yield_proportion * numpy.prod(
+                valid_stack, axis=0)
+            return result
+
+        pygeoprocessing.raster_calculator(
+            [(self.base_crop_area_path, 1),
+             (self.base_crop_yield_path, 1)],
+            mult_arrays_const, self.target_total_yield_path,
+            gdal.GDT_Float32, -9999,
+            gtiff_creation_options=GTIFF_CREATION_OPTIONS)
+
+
 def main():
     """Entry point."""
     if not os.path.exists(WORKSPACE_DIR):
@@ -144,7 +193,7 @@ def main():
         crop_table['crop'],
         crop_table['pol_dep']))
 
-    percent_refuse_crop_map = dict(zip(
+    proportion_refuse_crop_map = dict(zip(
         crop_table['crop'],
         crop_table['Percentrefuse']/100.0))
 
@@ -157,7 +206,7 @@ def main():
          for crop_id in dep_pol_id_map])
 
     target_crop_total_yield_path_id_map = dict(
-        [(crop_id, os.path.join(CROP_FILE_DIR, "%s_tot_yield.tif" % crop_id))
+        [(crop_id, os.path.join(TARGET_CROP_FILE_DIR, "%s_tot_yield.tif" % crop_id))
          for crop_id in dep_pol_id_map])
 
     crop_yield_task_id_map = {}
@@ -165,7 +214,7 @@ def main():
     for crop_id in dep_pol_id_map:
         base_crop_yield_path = crop_yield_path_id_map[crop_id]
         target_crop_yield_path = os.path.join(
-            CROP_FILE_DIR, os.path.basename(
+            TARGET_CROP_FILE_DIR, os.path.basename(
                 base_crop_yield_path).split('.')[0] + '.tif')
         crop_yield_path_id_map[crop_id] = target_crop_yield_path
         crop_yield_task_id_map[crop_id] = task_graph.add_task(
@@ -175,7 +224,7 @@ def main():
 
         base_crop_area_path = crop_area_path_id_map[crop_id]
         target_crop_area_path = os.path.join(
-            CROP_FILE_DIR, os.path.basename(
+            TARGET_CROP_FILE_DIR, os.path.basename(
                 base_crop_area_path).split('.')[0] + '.tif')
         crop_area_path_id_map[crop_id] = target_crop_area_path
         crop_area_task_id_map[crop_id] = task_graph.add_task(
@@ -184,13 +233,10 @@ def main():
             target_path_list=[target_crop_area_path])
 
         total_yield_task = task_graph.add_task(
-            func=pygeoprocessing.raster_calculator,
-            args=(
-                [(target_crop_area_path, 1),
-                 (target_crop_yield_path, 1)],
-                mult_arrays, target_crop_total_yield_path_id_map[crop_id],
-                gdal.GDT_Float32, -9999),
-            kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
+            func=TotalYieldOp(
+                target_crop_area_path, target_crop_yield_path,
+                proportion_refuse_crop_map[crop_id],
+                target_crop_total_yield_path_id_map[crop_id]),
             target_path_list=[target_crop_total_yield_path_id_map[crop_id]],
             dependent_task_list=[
                 crop_area_task_id_map[crop_id],

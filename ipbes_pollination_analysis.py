@@ -17,16 +17,18 @@ logging.basicConfig(
 
 LUH2_BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis\LUH2_1KM"
 WORKSPACE_DIR = 'pollination_workspace'
-CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
-GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
-
 BASE_CROP_DATA_DIR = r"C:\Users\Rich\Dropbox\Monfreda maps"
-POL_DEP_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "poll_dep.csv")
+
+CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
+MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
+CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "crop_info.csv")
+
+GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
 
 NODATA = -9999
 
-# any proportion of ag above this is ag
-CROP_THRESHOLD_VALUE = 0.5
+# any proportion of ag above this is classified as
+CROP_THRESHOLD_VALUE = 0.05
 
 
 def asc_to_tiff(base_path, target_path):
@@ -127,21 +129,24 @@ def step_kernel(n_pixels, kernel_filepath):
 
 def main():
     """Entry point."""
-
     if not os.path.exists(WORKSPACE_DIR):
         os.makedirs(WORKSPACE_DIR)
 
     task_graph = taskgraph.TaskGraph(
-        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 4)
+        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 0)
 
-    pol_dependence_table = pandas.read_csv(POL_DEP_TABLE_PATH)
+    crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 
-    pol_dep_crop_table = (
-        pol_dependence_table.loc[
-            pol_dependence_table['prop_poll_dep'] != 0])
+    crop_table = crop_table[
+        pandas.notnull(crop_table['crop'])]
+
     dep_pol_id_map = dict(zip(
-        pol_dep_crop_table['crop_id'],
-        pol_dep_crop_table['prop_poll_dep']))
+        crop_table['crop'],
+        crop_table['pol_dep']))
+
+    percent_refuse_crop_map = dict(zip(
+        crop_table['crop'],
+        crop_table['Percentrefuse']/100.0))
 
     crop_yield_path_id_map = dict(
         [(crop_id, os.path.join(BASE_CROP_DATA_DIR, "%s_yield.asc.zip" % crop_id))
@@ -149,6 +154,10 @@ def main():
 
     crop_area_path_id_map = dict(
         [(crop_id, os.path.join(BASE_CROP_DATA_DIR, "%s_harea.asc.zip" % crop_id))
+         for crop_id in dep_pol_id_map])
+
+    target_crop_total_yield_path_id_map = dict(
+        [(crop_id, os.path.join(CROP_FILE_DIR, "%s_tot_yield.tif" % crop_id))
          for crop_id in dep_pol_id_map])
 
     crop_yield_task_id_map = {}
@@ -173,6 +182,27 @@ def main():
             func=asc_to_tiff,
             args=(base_crop_area_path, target_crop_area_path),
             target_path_list=[target_crop_area_path])
+
+        total_yield_task = task_graph.add_task(
+            func=pygeoprocessing.raster_calculator,
+            args=(
+                [(target_crop_area_path, 1),
+                 (target_crop_yield_path, 1)],
+                mult_arrays, target_crop_total_yield_path_id_map[crop_id],
+                gdal.GDT_Float32, -9999),
+            kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
+            target_path_list=[target_crop_total_yield_path_id_map[crop_id]],
+            dependent_task_list=[
+                crop_area_task_id_map[crop_id],
+                crop_yield_task_id_map[crop_id]]
+            )
+
+    """Proportion of micronutrient production dependent on pollination
+        For each crop (at 10 km):
+            For Calories, Vitamin A, Fe, and Folate
+            total micronutrient production = yield (EarthStat) x (100-percent refuse)/100 x area (EarthStat, convert proportion of gridcell to hectares) x micronutrient content per ton of crop
+            pollinator-dependent micronutrient production = total micronutrient production x pollinator dependency ratio (0-0.95)
+    """
 
     crop_path_list = [
         os.path.join(LUH2_BASE_DATA_DIR, "c3ann.flt"),
@@ -285,6 +315,7 @@ def main():
                 classify_cropland_task, habitat_proportion_task]
             )
 
+    task_graph.close()
     task_graph.join()
 
 

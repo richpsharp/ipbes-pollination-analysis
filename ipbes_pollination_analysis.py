@@ -22,6 +22,8 @@ LUH2_BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis\LUH2_1KM
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = r"C:\Users\Rich\Dropbox\Monfreda maps"
 CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "crop_info.csv")
+CROP_CATEGORIES_TABLE_PATH = os.path.join(
+    BASE_CROP_DATA_DIR, "earthstat_to_luh_categories.csv")
 
 TARGET_CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
 TARGET_MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
@@ -182,6 +184,14 @@ def main():
 
     crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 
+    # First we do this:
+    """Proportion of micronutrient production dependent on pollination
+        For each crop (at 10 km):
+            For Calories, Vitamin A, Fe, and Folate
+            total micronutrient production = yield (EarthStat) x (100-percent refuse)/100 x area (EarthStat, convert proportion of gridcell to hectares) x micronutrient content per ton of crop
+            pollinator-dependent micronutrient production = total micronutrient production x pollinator dependency ratio (0-0.95)
+    """
+
     # this filters out the first partially blank row that's used for unit
     # notation
     crop_table = crop_table[pandas.notnull(crop_table['crop'])]
@@ -269,12 +279,30 @@ def main():
                 dependent_task_list=[total_yield_task]
                 )
 
-    """Proportion of micronutrient production dependent on pollination
-        For each crop (at 10 km):
-            For Calories, Vitamin A, Fe, and Folate
-            total micronutrient production = yield (EarthStat) x (100-percent refuse)/100 x area (EarthStat, convert proportion of gridcell to hectares) x micronutrient content per ton of crop
-            pollinator-dependent micronutrient production = total micronutrient production x pollinator dependency ratio (0-0.95)
-    """
+    # Now we do this:
+    """Sum up all the crops in each functional group: c3ann, c3per, c4ann, c4per, c3nfx (Becky to classify in table) = c3ann vitamin A total and pollinator dependent production - for current, at 10 km resolution"""
+    crop_categories_table = pandas.read_csv(CROP_CATEGORIES_TABLE_PATH)
+
+    crop_id_functional_type_map = {}
+
+    for c_type, period in [
+            ["C3", "annual"], ["C3", "perennial"], ["C4", "annual"],
+            ["C4", "perennial"]]:
+        crop_id_functional_type_map['%s_%s' % (c_type, period)] = list(
+            crop_categories_table[
+                (crop_categories_table['c_type'] == c_type) &
+                (crop_categories_table['period'] == period)][
+                    'earthstat_filename_prefix'])
+
+    crop_id_functional_type_map['N-fixer'] = list(
+        crop_categories_table[
+            (crop_categories_table['c_type'] == 'N-fixer')][
+                'earthstat_filename_prefix'])
+
+    for functional_type, crop_id_list in (
+            crop_id_functional_type_map.iteritems()):
+        pass
+
 
     crop_path_list = [
         os.path.join(LUH2_BASE_DATA_DIR, "c3ann.flt"),

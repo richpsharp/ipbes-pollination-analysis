@@ -167,6 +167,7 @@ class MultRastersAndScalar(object):
                 valid_stack, axis=0)
             return result
 
+        print '**********', self.target_path
         pygeoprocessing.raster_calculator(
             [(x, 1) for x in self.base_raster_path_list],
             mult_arrays_scalar, self.target_path,
@@ -242,8 +243,8 @@ def main():
         total_yield_task = task_graph.add_task(
             func=MultRastersAndScalar(
                 [target_crop_area_path, target_crop_yield_path],
-                target_crop_total_yield_path_id_map[crop_id],
-                1.0-proportion_refuse_crop_map[crop_id]),
+                1.0-proportion_refuse_crop_map[crop_id],
+                target_crop_total_yield_path_id_map[crop_id]),
             target_path_list=[target_crop_total_yield_path_id_map[crop_id]],
             dependent_task_list=[
                 crop_area_task_id_map[crop_id],
@@ -301,8 +302,8 @@ def main():
 
     for functional_type, crop_id_list in (
             crop_id_functional_type_map.iteritems()):
-        pass
-
+        print functional_type, crop_id_list
+    return
 
     crop_path_list = [
         os.path.join(LUH2_BASE_DATA_DIR, "c3ann.flt"),

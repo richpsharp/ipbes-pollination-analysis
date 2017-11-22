@@ -14,6 +14,11 @@ import pandas
 
 N_WORKERS = 4
 POL_DEP_THRESHOLD = 0.3
+GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
+NODATA = -9999
+
+# any proportion of ag above this is classified as a crop
+CROP_THRESHOLD_VALUE = 0.05
 
 logging.basicConfig(
     format='%(asctime)s %(name)-10s %(levelname)-8s %(message)s',
@@ -21,12 +26,23 @@ logging.basicConfig(
 
 LOGGER = logging.getLogger('ipbes_pollination_analysis')
 
-LUH2_BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis\LUH2_1KM"
+POSSIBLE_DROPBOX_LOCATIONS = [
+    r'C:\Users\Rich\Dropbox',
+    r'C:\Users\rpsharp\Dropbox',
+    r'E:\Dropbox']
+for path in POSSIBLE_DROPBOX_LOCATIONS:
+    if os.path.exists(path):
+        BASE_DROPBOX_DIR = path
+    break
+
+LUH2_BASE_DATA_DIR = os.path.join(
+    BASE_DROPBOX_DIR, 'ipbes-pollination-analysis', 'LUH2_1KM')
 WORKSPACE_DIR = 'pollination_workspace'
-BASE_CROP_DATA_DIR = r"C:\Users\Rich\Dropbox\Monfreda maps"
-CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "crop_info.csv")
+BASE_CROP_DATA_DIR = os.path.join(
+    BASE_DROPBOX_DIR, 'Monfreda maps', 'crop_rasters_as_geotiff')
+CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, 'crop_info.csv')
 CROP_CATEGORIES_TABLE_PATH = os.path.join(
-    BASE_CROP_DATA_DIR, "earthstat_to_luh_categories.csv")
+    BASE_CROP_DATA_DIR, 'earthstat_to_luh_categories.csv')
 
 MICRONUTRIENT_LIST = ['Energy', 'VitA', 'Fe', 'Folate']
 
@@ -38,15 +54,10 @@ RASTER_FUNCTIONAL_TYPE_MAP = {
     ("N-fixer", None): os.path.join(LUH2_BASE_DATA_DIR, 'c3nfx.flt')
 }
 
-TARGET_CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
-TARGET_MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
-
-GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
-
-NODATA = -9999
-
-# any proportion of ag above this is classified as
-CROP_THRESHOLD_VALUE = 0.05
+TARGET_CROP_FILE_DIR = os.path.join(
+    WORKSPACE_DIR, 'crop_geotiffs')
+TARGET_MICRONUTRIENT_DIR = os.path.join(
+    WORKSPACE_DIR, 'micronutrient_working_files')
 
 
 def asc_to_tiff(base_path, target_path):
@@ -346,54 +357,30 @@ def main():
         crop_table['Percentrefuse']/100.0))
 
     crop_yield_path_id_map = dict(
-        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, "%s_yield.asc.zip" % crop_id))
+        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, '%s_yield.tif' % crop_id))
          for crop_id in dep_pol_id_map])
 
     crop_area_path_id_map = dict(
-        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, "%s_harea.asc.zip" % crop_id))
+        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, '%s_harea.tif' % crop_id))
          for crop_id in dep_pol_id_map])
 
     target_crop_total_yield_path_id_map = dict(
-        [(crop_id, os.path.join(TARGET_CROP_FILE_DIR, "%s_tot_yield.tif" % crop_id))
+        [(crop_id, os.path.join(
+            WORKSPACE_DIR, 'crop_yields', '%s_tot_yield.tif' % crop_id))
          for crop_id in dep_pol_id_map])
 
-    crop_yield_task_id_map = {}
-    crop_area_task_id_map = {}
     pollinator_dependent_micronutrient_yield_path_id_map = {}
     total_micronutrient_yield_path_id_map = {}
     for crop_id in dep_pol_id_map:
-        base_crop_yield_path = crop_yield_path_id_map[crop_id]
-        target_crop_yield_path = os.path.join(
-            TARGET_CROP_FILE_DIR, os.path.basename(
-                base_crop_yield_path).split('.')[0] + '.tif')
-        crop_yield_path_id_map[crop_id] = target_crop_yield_path
-        crop_yield_task_id_map[crop_id] = task_graph.add_task(
-            func=asc_to_tiff,
-            args=(base_crop_yield_path, target_crop_yield_path),
-            target_path_list=[target_crop_yield_path],
-            task_name='asc_to_tiff')
-
-        base_crop_area_path = crop_area_path_id_map[crop_id]
-        target_crop_area_path = os.path.join(
-            TARGET_CROP_FILE_DIR, os.path.basename(
-                base_crop_area_path).split('.')[0] + '.tif')
-        crop_area_path_id_map[crop_id] = target_crop_area_path
-        crop_area_task_id_map[crop_id] = task_graph.add_task(
-            func=asc_to_tiff,
-            args=(base_crop_area_path, target_crop_area_path),
-            target_path_list=[target_crop_area_path],
-            task_name='asc_to_tiff')
-
         total_yield_task = task_graph.add_task(
             func=MultRastersAndScalar(
-                [target_crop_area_path, target_crop_yield_path],
+                [crop_area_path_id_map[crop_id],
+                 crop_yield_path_id_map[crop_id]],
                 1.0-proportion_refuse_crop_map[crop_id],
                 target_crop_total_yield_path_id_map[crop_id]),
             target_path_list=[target_crop_total_yield_path_id_map[crop_id]],
-            dependent_task_list=[
-                crop_area_task_id_map[crop_id],
-                crop_yield_task_id_map[crop_id]],
-            task_name='MultRastersAndScalar'
+            task_name='MultRastersAndScalar_%s' % (
+                target_crop_total_yield_path_id_map[crop_id])
             )
 
         for micronutrient_id in MICRONUTRIENT_LIST:
@@ -547,7 +534,7 @@ def main():
             pol_dep_loss_path = os.path.join(
                 WORKSPACE_DIR, 'LUH2_pol_dep_loss_%s_%s_%s_yield.tif' % (
                     micronutrient_id, c_type, period))
-            pol_dep_mask_task = task_graph.add_task(
+            pol_dep_mask = task_graph.add_task(
                 func=MaskAtThreshold(
                     target_aligned_rasters[0], target_aligned_rasters[2],
                     POL_DEP_THRESHOLD, pol_dep_loss_path),

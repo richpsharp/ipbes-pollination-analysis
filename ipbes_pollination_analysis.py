@@ -113,6 +113,21 @@ def add_arrays(*array_list):
     return result
 
 
+def add_arrays_passthrough_nodata(*array_list):
+    stack = numpy.stack(array_list)
+    valid_mask = (
+        numpy.bitwise_or.reduce(stack != NODATA, axis=0))
+    n_valid = numpy.count_nonzero(valid_mask)
+    broadcast_valid_mask = numpy.broadcast_to(valid_mask, stack.shape)
+    valid_stack = stack[broadcast_valid_mask].reshape(
+        len(array_list), n_valid)
+    valid_stack[valid_stack == NODATA] = 0.0
+    result = numpy.empty(array_list[0].shape, dtype=numpy.float32)
+    result[:] = NODATA
+    result[valid_mask] = numpy.sum(valid_stack, axis=0)
+    return result
+
+
 def step_kernel(n_pixels, kernel_filepath):
     """Create a box kernel of 1+2*n_pixels."""
 
@@ -221,7 +236,8 @@ def main():
 
     crop_yield_task_id_map = {}
     crop_area_task_id_map = {}
-    pollinator_dependent_micronutrient_path_id_map = {}
+    pollinator_dependent_micronutrient_yield_path_id_map = {}
+    total_micronutrient_yield_path_id_map = {}
     for crop_id in dep_pol_id_map:
         base_crop_yield_path = crop_yield_path_id_map[crop_id]
         target_crop_yield_path = os.path.join(
@@ -258,9 +274,11 @@ def main():
             )
 
         for micronutrient_id in MICRONUTRIENT_LIST:
-            target_micronutrient_path = os.path.splitext(
+            micronutrient_yield_path = os.path.splitext(
                 target_crop_total_yield_path_id_map[crop_id])[0] + (
                     '_%s.tif' % (micronutrient_id))
+            total_micronutrient_yield_path_id_map[
+                (micronutrient_id, crop_id)] = micronutrient_yield_path
 
             # the 1e4 converts the Mg to g for nutrient units
             micronutrient_task = task_graph.add_task(
@@ -268,26 +286,26 @@ def main():
                     [target_crop_total_yield_path_id_map[crop_id]],
                     1e4 * float(crop_table[crop_table['crop'] == crop_id][
                         micronutrient_id]),
-                    target_micronutrient_path),
-                target_path_list=[target_micronutrient_path],
+                    micronutrient_yield_path),
+                target_path_list=[micronutrient_yield_path],
                 dependent_task_list=[total_yield_task],
                 task_name='MultRastersAndScalar'
                 )
 
-            target_pollinator_dependent_micronutrient_path = os.path.splitext(
-                target_micronutrient_path)[0] + '_%s.tif' % 'pol_dep'
+            pollinator_dependent_micronutrient_yield_path = os.path.splitext(
+                micronutrient_yield_path)[0] + '_%s.tif' % 'pol_dep'
 
-            pollinator_dependent_micronutrient_path_id_map[
+            pollinator_dependent_micronutrient_yield_path_id_map[
                 (micronutrient_id, crop_id)] = (
-                target_pollinator_dependent_micronutrient_path)
+                pollinator_dependent_micronutrient_yield_path)
             pollinator_dependent_micronutrient_task = task_graph.add_task(
                 func=MultRastersAndScalar(
-                    [target_micronutrient_path],
+                    [micronutrient_yield_path],
                     float(crop_table[
                         crop_table['crop'] == crop_id]['pol_dep']),
-                    target_pollinator_dependent_micronutrient_path),
+                    pollinator_dependent_micronutrient_yield_path),
                 target_path_list=[
-                    target_pollinator_dependent_micronutrient_path],
+                    pollinator_dependent_micronutrient_yield_path],
                 dependent_task_list=[micronutrient_task],
                 task_name='MultRastersAndScalar'
                 )
@@ -315,11 +333,45 @@ def main():
     for functional_type, crop_id_list in (
             crop_id_functional_type_map.iteritems()):
         for micronutrient_id in MICRONUTRIENT_LIST:
-            functional_crop_path_list = [
-                pollinator_dependent_micronutrient_path_id_map[
+            pol_dep_micronutrient_functional_yield_path = os.path.join(
+                WORKSPACE_DIR, 'pol_dep_%s_%s_yield.tif' % (
+                    micronutrient_id, functional_type))
+
+            pollinator_functional_crop_path_list = [
+                pollinator_dependent_micronutrient_yield_path_id_map[
                     (micronutrient_id, crop_id)]
                 for crop_id in crop_id_list if crop_id in dep_pol_id_map]
-    print functional_crop_path_list
+
+            _ = task_graph.add_task(
+                func=pygeoprocessing.raster_calculator,
+                args=(
+                    [(x, 1) for x in pollinator_functional_crop_path_list],
+                    add_arrays_passthrough_nodata, pol_dep_micronutrient_functional_yield_path,
+                    gdal.GDT_Float32, NODATA),
+                kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
+                target_path_list=[pol_dep_micronutrient_functional_yield_path],
+                task_name='raster_calculator_sum_pol_dep_micronutrient'
+            )
+
+            total_micronutrient_functional_yield_path = os.path.join(
+                WORKSPACE_DIR, 'total_%s_%s_yield.tif' % (
+                    micronutrient_id, functional_type))
+
+            total_functional_crop_path_list = [
+                total_micronutrient_yield_path_id_map[(micronutrient_id, crop_id)]
+                for crop_id in crop_id_list if crop_id in dep_pol_id_map]
+
+            _ = task_graph.add_task(
+                func=pygeoprocessing.raster_calculator,
+                args=(
+                    [(x, 1) for x in total_functional_crop_path_list],
+                    add_arrays_passthrough_nodata, total_micronutrient_functional_yield_path,
+                    gdal.GDT_Float32, NODATA),
+                kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
+                target_path_list=[total_micronutrient_functional_yield_path],
+                task_name='raster_calculator_sum_total_micronutrient'
+            )
+
     task_graph.join()
     return
 
@@ -364,7 +416,7 @@ def main():
                 gdal.GDT_Float32, NODATA),
             kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
             target_path_list=[target_path],
-            task_name='raster_calculator'
+            task_name='raster_calculator_add_arrays'
             )
 
     kernel_path = os.path.join(WORKSPACE_DIR, 'box_kernel.tif')

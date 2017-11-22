@@ -1,5 +1,6 @@
 """This pollination analysis is guided by this doc https://docs.google.com/document/d/1k5yyhisemNrjG7ZSFGfD7GbIGY3rcNWmNulL2Hcqr9Q/edit"""
 import os
+import errno
 import logging
 import subprocess
 import hashlib
@@ -39,7 +40,9 @@ LUH2_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-pollination-analysis', 'LUH2_1KM')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
-    BASE_DROPBOX_DIR, 'Monfreda maps', 'crop_rasters_as_geotiff')
+    BASE_DROPBOX_DIR, 'Monfreda maps')
+BASE_CROP_RASTER_DIR = os.path.join(
+    BASE_CROP_DATA_DIR, 'crop_rasters_as_geotiff')
 CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, 'crop_info.csv')
 CROP_CATEGORIES_TABLE_PATH = os.path.join(
     BASE_CROP_DATA_DIR, 'earthstat_to_luh_categories.csv')
@@ -208,6 +211,11 @@ class MaskAtThreshold(object):
         self.target_raster_path = target_raster_path
 
     def __call__(self):
+        try:
+            os.makedirs(os.path.dirname(self.target_raster_path))
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
 
         base_threshold_nodata = pygeoprocessing.get_raster_info(
             self.base_threshold_raster_path)['nodata'][0]
@@ -265,6 +273,11 @@ class MicroNutrientRiskThreshold(object):
         self.target_pol_dep_risk_path = target_pol_dep_risk_path
 
     def __call__(self):
+        try:
+            os.makedirs(os.path.dirname(self.target_pol_dep_risk_path))
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
 
         luh2_nodata = pygeoprocessing.get_raster_info(
             self.base_raster_path_list[0])['nodata'][0]
@@ -304,6 +317,11 @@ class MultRastersAndScalar(object):
         self.scalar = scalar
 
     def __call__(self):
+        try:
+            os.makedirs(os.path.dirname(self.target_path))
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
 
         def mult_arrays_scalar(*array_list):
             stack = numpy.stack(array_list)
@@ -357,11 +375,11 @@ def main():
         crop_table['Percentrefuse']/100.0))
 
     crop_yield_path_id_map = dict(
-        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, '%s_yield.tif' % crop_id))
+        [(crop_id, os.path.join(BASE_CROP_RASTER_DIR, '%s_yield.tif' % crop_id))
          for crop_id in dep_pol_id_map])
 
     crop_area_path_id_map = dict(
-        [(crop_id, os.path.join(BASE_CROP_DATA_DIR, '%s_harea.tif' % crop_id))
+        [(crop_id, os.path.join(BASE_CROP_RASTER_DIR, '%s_harea.tif' % crop_id))
          for crop_id in dep_pol_id_map])
 
     target_crop_total_yield_path_id_map = dict(
@@ -399,7 +417,7 @@ def main():
                     micronutrient_yield_path),
                 target_path_list=[micronutrient_yield_path],
                 dependent_task_list=[total_yield_task],
-                task_name='MultRastersAndScalar'
+                task_name='MultRastersAndScalar_%s' % micronutrient_yield_path
                 )
 
             pollinator_dependent_micronutrient_yield_path = os.path.splitext(

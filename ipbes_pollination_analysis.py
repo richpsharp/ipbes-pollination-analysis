@@ -12,11 +12,13 @@ import pygeoprocessing
 import numpy
 import pandas
 
+N_WORKERS = 4
 
 logging.basicConfig(
     format='%(asctime)s %(name)-10s %(levelname)-8s %(message)s',
     level=logging.DEBUG, datefmt='%m/%d/%Y %H:%M:%S ')
 
+LOGGER = logging.getLogger('ipbes_pollination_analysis')
 
 LUH2_BASE_DATA_DIR = r"C:\Users\Rich\Dropbox\ipbes-pollination-analysis\LUH2_1KM"
 WORKSPACE_DIR = 'pollination_workspace'
@@ -26,6 +28,14 @@ CROP_CATEGORIES_TABLE_PATH = os.path.join(
     BASE_CROP_DATA_DIR, "earthstat_to_luh_categories.csv")
 
 MICRONUTRIENT_LIST = ['Energy', 'VitA', 'Fe', 'Folate']
+
+RASTER_FUNCTIONAL_TYPE_MAP = {
+    ("C3", "annual"): os.path.join(LUH2_BASE_DATA_DIR, 'c3ann.flt'),
+    ("C3", "perennial"): os.path.join(LUH2_BASE_DATA_DIR, 'c3per.flt'),
+    ("C4", "annual"): os.path.join(LUH2_BASE_DATA_DIR, 'c4ann.flt'),
+    ("C4", "perennial"): os.path.join(LUH2_BASE_DATA_DIR, 'c4per.flt'),
+    ("N-fixer", None): os.path.join(LUH2_BASE_DATA_DIR, 'c3nfx.flt')
+}
 
 TARGET_CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
 TARGET_MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
@@ -152,6 +162,60 @@ def step_kernel(n_pixels, kernel_filepath):
     kernel_band.Fill(1)
 
 
+class MicroNutrientRiskThreshold(object):
+    def __init__(
+            self, base_raster_path_list, threshold, target_pol_dep_risk_path):
+        """Mask subtract pollinator dependent yields from total.
+
+        This happens when the fractional area of the functional type is less
+        than the threshold.
+
+        Parameters:
+            base_raster_path_list (list): list of base paths in order of LUH2
+                functional type proportion, total yield, pollinator dep yield.
+                These rasters are all spatially aligned.
+            threshold (float): if a piel in LUH2 is below this value,
+                pollinator dependent yield is subtracted from total. Otherwise
+                total is passed through.
+            target_pol_dep_risk_path (string): path to output raster.
+
+        Returns:
+            None.
+        """
+        try:
+            self.__name__ = hashlib.sha1(inspect.getsource(
+                MicroNutrientRiskThreshold.__call__)).hexdigest()
+        except IOError:
+            # default to the classname if it doesn't work
+            self.__name__ = MicroNutrientRiskThreshold.__name__
+        self.__name__ += str([
+            base_raster_path_list, threshold, target_pol_dep_risk_path])
+        self.base_raster_path_list = base_raster_path_list
+        self.threshold = threshold
+        self.target_pol_dep_risk_path = target_pol_dep_risk_path
+
+    def __call__(self):
+
+        luh2_nodata = pygeoprocessing.get_raster_info(
+            self.base_raster_path_list[0])['nodata'][0]
+
+        def calc_threshold_yield(
+                luh2_array, total_yield_array, pol_dep_yield_array):
+            """Pass through total yield unless luh2 < 0.3 then sub pol_dep."""
+            result = numpy.empty_like(total_yield_array)
+            pol_dep_mask = (
+                (luh2_array != luh2_nodata) &
+                (luh2_array < self.threshold))
+            result[pol_dep_mask] -= pol_dep_yield_array[pol_dep_mask]
+            return result
+
+        pygeoprocessing.raster_calculator(
+            [(x, 1) for x in self.base_raster_path_list],
+            calc_threshold_yield, self.target_pol_dep_risk_path,
+            gdal.GDT_Float32, NODATA,
+            gtiff_creation_options=GTIFF_CREATION_OPTIONS)
+
+
 class MultRastersAndScalar(object):
     def __init__(
             self, base_raster_path_list, scalar, target_path):
@@ -163,7 +227,6 @@ class MultRastersAndScalar(object):
             self.__name__ = MultRastersAndScalar.__name__
         self.__name__ += str([
             base_raster_path_list, scalar, target_path])
-
         self.base_raster_path_list = base_raster_path_list
         self.target_path = target_path
         self.scalar = scalar
@@ -191,14 +254,13 @@ class MultRastersAndScalar(object):
             gdal.GDT_Float32, NODATA,
             gtiff_creation_options=GTIFF_CREATION_OPTIONS)
 
-
 def main():
     """Entry point."""
     if not os.path.exists(WORKSPACE_DIR):
         os.makedirs(WORKSPACE_DIR)
 
     task_graph = taskgraph.TaskGraph(
-        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 4)
+        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), N_WORKERS)
 
     crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 
@@ -316,37 +378,34 @@ def main():
 
     crop_id_functional_type_map = {}
 
-    for c_type, period in [
-            ["C3", "annual"], ["C3", "perennial"], ["C4", "annual"],
-            ["C4", "perennial"]]:
-        crop_id_functional_type_map['%s_%s' % (c_type, period)] = list(
-            crop_categories_table[
-                (crop_categories_table['c_type'] == c_type) &
-                (crop_categories_table['period'] == period)][
-                    'earthstat_filename_prefix'])
-
-    crop_id_functional_type_map['N-fixer'] = list(
-        crop_categories_table[
-            (crop_categories_table['c_type'] == 'N-fixer')][
+    for c_type, period in RASTER_FUNCTIONAL_TYPE_MAP:
+        crop_filter_series = crop_categories_table['c_type'] == c_type
+        if period is not None:
+            # only the N-Fix is missing a period
+            crop_filter_series &= (crop_categories_table['period'] == period)
+        crop_id_functional_type_map[(c_type, period)] = list(
+            crop_categories_table[crop_filter_series][
                 'earthstat_filename_prefix'])
 
-    for functional_type, crop_id_list in (
+    for (c_type, period), crop_id_list in (
             crop_id_functional_type_map.iteritems()):
         for micronutrient_id in MICRONUTRIENT_LIST:
+            # calculate both the total and pollinator dependent micronutrient
             pol_dep_micronutrient_functional_yield_path = os.path.join(
-                WORKSPACE_DIR, 'pol_dep_%s_%s_yield.tif' % (
-                    micronutrient_id, functional_type))
+                WORKSPACE_DIR, 'pol_dep_%s_%s_%s_yield.tif' % (
+                    micronutrient_id, c_type, period))
 
             pollinator_functional_crop_path_list = [
                 pollinator_dependent_micronutrient_yield_path_id_map[
                     (micronutrient_id, crop_id)]
                 for crop_id in crop_id_list if crop_id in dep_pol_id_map]
 
-            _ = task_graph.add_task(
+            pol_dep_micro_task = task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
                 args=(
                     [(x, 1) for x in pollinator_functional_crop_path_list],
-                    add_arrays_passthrough_nodata, pol_dep_micronutrient_functional_yield_path,
+                    add_arrays_passthrough_nodata,
+                    pol_dep_micronutrient_functional_yield_path,
                     gdal.GDT_Float32, NODATA),
                 kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
                 target_path_list=[pol_dep_micronutrient_functional_yield_path],
@@ -354,24 +413,76 @@ def main():
             )
 
             total_micronutrient_functional_yield_path = os.path.join(
-                WORKSPACE_DIR, 'total_%s_%s_yield.tif' % (
-                    micronutrient_id, functional_type))
+                WORKSPACE_DIR, 'total_%s_%s_%s_yield.tif' % (
+                    micronutrient_id, c_type, period))
 
             total_functional_crop_path_list = [
                 total_micronutrient_yield_path_id_map[(micronutrient_id, crop_id)]
                 for crop_id in crop_id_list if crop_id in dep_pol_id_map]
 
-            _ = task_graph.add_task(
+            total_micro_task = task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
                 args=(
                     [(x, 1) for x in total_functional_crop_path_list],
-                    add_arrays_passthrough_nodata, total_micronutrient_functional_yield_path,
+                    add_arrays_passthrough_nodata,
+                    total_micronutrient_functional_yield_path,
                     gdal.GDT_Float32, NODATA),
                 kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
                 target_path_list=[total_micronutrient_functional_yield_path],
                 task_name='raster_calculator_sum_total_micronutrient'
             )
 
+            # At 1 km LUH2 data, subtract pollinator dependent from total micronutrient production for any grid cells < 0.30; keep it at total for micronutrient production for any grid cells >0.30
+
+            # we need to align the lh2 and yield rasters so they're the
+            # same overlap and pixel size
+            luh2_raster_path = RASTER_FUNCTIONAL_TYPE_MAP[(c_type, period)]
+            luh2_raster_info = pygeoprocessing.get_raster_info(
+                luh2_raster_path)
+
+            # put aligned rasters in a subdirectory
+            target_aligned_rasters = [
+                os.path.join(
+                    WORKSPACE_DIR, 'aligned_%s_%s_%s_rasters' % (
+                        c_type, period, micronutrient_id),
+                    os.path.basename(x)) for x in [
+                        luh2_raster_path,
+                        total_micronutrient_functional_yield_path,
+                        pol_dep_micronutrient_functional_yield_path]]
+
+            # clip and align the yield and LUH2 rasters to be the intersection
+            # of bounding boxes and the pixel size of LUH2
+            align_luh2_task = task_graph.add_task(
+                func=pygeoprocessing.align_and_resize_raster_stack,
+                args=(
+                    [luh2_raster_path,
+                     total_micronutrient_functional_yield_path,
+                     pol_dep_micronutrient_functional_yield_path],
+                    target_aligned_rasters,
+                    ['nearest']*3, luh2_raster_info['pixel_size'],
+                    'intersection'),
+                kwargs={
+                    'raster_align_index': 0,
+                    'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
+                target_path_list=target_aligned_rasters,
+                dependent_task_list=[pol_dep_micro_task, total_micro_task],
+                task_name='align_resize_raster_%s' % str(
+                    (c_type, period, micronutrient_id)))
+
+            pol_dep_risk_path = os.path.join(
+                WORKSPACE_DIR, 'LUH2_risk_%s_%s_%s_yield.tif' % (
+                    micronutrient_id, c_type, period))
+
+            # the 0.3 comes from Becky saying that's where we should threshold
+            pol_dep_risk_task = task_graph.add_task(
+                func=MicroNutrientRiskThreshold(
+                    target_aligned_rasters, 0.3, pol_dep_risk_path),
+                target_path_list=[pol_dep_risk_path],
+                dependent_task_list=[align_luh2_task],
+                task_name='MicroNutrientRiskThreshold_%s' % str(
+                    (micronutrient_id, c_type, period)))
+
+    LOGGER.info("joining taskgraph")
     task_graph.join()
     return
 

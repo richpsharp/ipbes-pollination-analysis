@@ -13,6 +13,7 @@ import numpy
 import pandas
 
 N_WORKERS = 4
+POL_DEP_THRESHOLD = 0.3
 
 logging.basicConfig(
     format='%(asctime)s %(name)-10s %(levelname)-8s %(message)s',
@@ -160,6 +161,64 @@ def step_kernel(n_pixels, kernel_filepath):
     kernel_band = kernel_dataset.GetRasterBand(1)
     kernel_band.SetNoDataValue(NODATA)
     kernel_band.Fill(1)
+
+
+class MaskAtThreshold(object):
+    def __init__(
+            self, base_threshold_raster_path, base_raster_path, threshold,
+            target_raster_path):
+        """Pass through base raster where threshold is < threshold.
+
+        Parameters:
+            base_threshold_raster_path (str): path to a floating point raster
+                used as the threshold cutoff.
+            base_raster_path (str): path to base raster to pass through or
+                mask if threshold raster is < threshold
+            threshold (float): if a pixel in threshold_raster is below this
+                value, pollinator dependent yield is subtracted from total.
+                Otherwise total is passed through.
+            target_raster_path (string): path to output raster.
+
+        Returns:
+            None.
+        """
+        try:
+            self.__name__ = hashlib.sha1(inspect.getsource(
+                MaskAtThreshold.__call__)).hexdigest()
+        except IOError:
+            # default to the classname if it doesn't work
+            self.__name__ = MaskAtThreshold.__name__
+        self.__name__ += str([
+            base_threshold_raster_path, base_raster_path, threshold,
+            target_raster_path])
+        self.base_threshold_raster_path = base_threshold_raster_path
+        self.base_raster_path = base_raster_path
+        self.threshold = threshold
+        self.target_raster_path = target_raster_path
+
+    def __call__(self):
+
+        base_threshold_nodata = pygeoprocessing.get_raster_info(
+            self.base_threshold_raster_path)['nodata'][0]
+
+        def threshold_mask(
+                threshold_array, base_array):
+            """Pass through base if threshold < self.threshold."""
+            result = numpy.empty_like(base_array)
+            result[:] = NODATA
+            threshold_mask = (
+                (threshold_array != base_threshold_nodata) &
+                (base_array != NODATA) &
+                (threshold_array < self.threshold))
+            result[threshold_mask] -= base_array[threshold_mask]
+            return result
+
+        pygeoprocessing.raster_calculator(
+            [(self.base_threshold_raster_path, 1),
+             (self.base_raster_path, 1)],
+            threshold_mask, self.target_raster_path,
+            gdal.GDT_Float32, NODATA,
+            gtiff_creation_options=GTIFF_CREATION_OPTIONS)
 
 
 class MicroNutrientRiskThreshold(object):
@@ -478,10 +537,23 @@ def main():
             # the 0.3 comes from Becky saying that's where we should threshold
             pol_dep_risk_task = task_graph.add_task(
                 func=MicroNutrientRiskThreshold(
-                    target_aligned_rasters, 0.3, pol_dep_risk_path),
+                    target_aligned_rasters, POL_DEP_THRESHOLD, pol_dep_risk_path),
                 target_path_list=[pol_dep_risk_path],
                 dependent_task_list=[align_luh2_task],
                 task_name='MicroNutrientRiskThreshold_%s' % str(
+                    (micronutrient_id, c_type, period)))
+
+            # 0 is LUH and 2 is pol dep
+            pol_dep_loss_path = os.path.join(
+                WORKSPACE_DIR, 'LUH2_pol_dep_loss_%s_%s_%s_yield.tif' % (
+                    micronutrient_id, c_type, period))
+            pol_dep_mask_task = task_graph.add_task(
+                func=MaskAtThreshold(
+                    target_aligned_rasters[0], target_aligned_rasters[2],
+                    POL_DEP_THRESHOLD, pol_dep_loss_path),
+                target_path_list=[pol_dep_loss_path],
+                dependent_task_list=[align_luh2_task],
+                task_name='MaskAtThreshold_%s' % str(
                     (micronutrient_id, c_type, period)))
 
     LOGGER.info("joining taskgraph")

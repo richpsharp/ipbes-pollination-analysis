@@ -203,8 +203,10 @@ class MicroNutrientRiskThreshold(object):
                 luh2_array, total_yield_array, pol_dep_yield_array):
             """Pass through total yield unless luh2 < 0.3 then sub pol_dep."""
             result = numpy.empty_like(total_yield_array)
+            result[:] = total_yield_array
             pol_dep_mask = (
                 (luh2_array != luh2_nodata) &
+                (pol_dep_yield_array != NODATA) &
                 (luh2_array < self.threshold))
             result[pol_dep_mask] -= pol_dep_yield_array[pol_dep_mask]
             return result

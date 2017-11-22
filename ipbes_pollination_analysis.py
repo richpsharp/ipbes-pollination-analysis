@@ -25,6 +25,8 @@ CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, "crop_info.csv")
 CROP_CATEGORIES_TABLE_PATH = os.path.join(
     BASE_CROP_DATA_DIR, "earthstat_to_luh_categories.csv")
 
+MICRONUTRIENT_LIST = ['Energy', 'VitA', 'Fe', 'Folate']
+
 TARGET_CROP_FILE_DIR = os.path.join(WORKSPACE_DIR, 'crop_geotiffs')
 TARGET_MICRONUTRIENT_DIR = os.path.join(WORKSPACE_DIR, 'micronutrient_working_files')
 
@@ -181,7 +183,7 @@ def main():
         os.makedirs(WORKSPACE_DIR)
 
     task_graph = taskgraph.TaskGraph(
-        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 0)
+        os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), 4)
 
     crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 
@@ -219,6 +221,7 @@ def main():
 
     crop_yield_task_id_map = {}
     crop_area_task_id_map = {}
+    pollinator_dependent_micronutrient_path_id_map = {}
     for crop_id in dep_pol_id_map:
         base_crop_yield_path = crop_yield_path_id_map[crop_id]
         target_crop_yield_path = os.path.join(
@@ -228,7 +231,8 @@ def main():
         crop_yield_task_id_map[crop_id] = task_graph.add_task(
             func=asc_to_tiff,
             args=(base_crop_yield_path, target_crop_yield_path),
-            target_path_list=[target_crop_yield_path])
+            target_path_list=[target_crop_yield_path],
+            task_name='asc_to_tiff')
 
         base_crop_area_path = crop_area_path_id_map[crop_id]
         target_crop_area_path = os.path.join(
@@ -238,7 +242,8 @@ def main():
         crop_area_task_id_map[crop_id] = task_graph.add_task(
             func=asc_to_tiff,
             args=(base_crop_area_path, target_crop_area_path),
-            target_path_list=[target_crop_area_path])
+            target_path_list=[target_crop_area_path],
+            task_name='asc_to_tiff')
 
         total_yield_task = task_graph.add_task(
             func=MultRastersAndScalar(
@@ -248,10 +253,11 @@ def main():
             target_path_list=[target_crop_total_yield_path_id_map[crop_id]],
             dependent_task_list=[
                 crop_area_task_id_map[crop_id],
-                crop_yield_task_id_map[crop_id]]
+                crop_yield_task_id_map[crop_id]],
+            task_name='MultRastersAndScalar'
             )
 
-        for micronutrient_id in ['Energy', 'VitA', 'Fe', 'Folate']:
+        for micronutrient_id in MICRONUTRIENT_LIST:
             target_micronutrient_path = os.path.splitext(
                 target_crop_total_yield_path_id_map[crop_id])[0] + (
                     '_%s.tif' % (micronutrient_id))
@@ -264,11 +270,16 @@ def main():
                         micronutrient_id]),
                     target_micronutrient_path),
                 target_path_list=[target_micronutrient_path],
-                dependent_task_list=[total_yield_task]
+                dependent_task_list=[total_yield_task],
+                task_name='MultRastersAndScalar'
                 )
 
             target_pollinator_dependent_micronutrient_path = os.path.splitext(
-                target_micronutrient_path)[0] + '_%s.tif' % '_pol_dep'
+                target_micronutrient_path)[0] + '_%s.tif' % 'pol_dep'
+
+            pollinator_dependent_micronutrient_path_id_map[
+                (micronutrient_id, crop_id)] = (
+                target_pollinator_dependent_micronutrient_path)
             pollinator_dependent_micronutrient_task = task_graph.add_task(
                 func=MultRastersAndScalar(
                     [target_micronutrient_path],
@@ -277,7 +288,8 @@ def main():
                     target_pollinator_dependent_micronutrient_path),
                 target_path_list=[
                     target_pollinator_dependent_micronutrient_path],
-                dependent_task_list=[total_yield_task]
+                dependent_task_list=[micronutrient_task],
+                task_name='MultRastersAndScalar'
                 )
 
     # Now we do this:
@@ -302,7 +314,13 @@ def main():
 
     for functional_type, crop_id_list in (
             crop_id_functional_type_map.iteritems()):
-        print functional_type, crop_id_list
+        for micronutrient_id in MICRONUTRIENT_LIST:
+            functional_crop_path_list = [
+                pollinator_dependent_micronutrient_path_id_map[
+                    (micronutrient_id, crop_id)]
+                for crop_id in crop_id_list if crop_id in dep_pol_id_map]
+    print functional_crop_path_list
+    task_graph.join()
     return
 
     crop_path_list = [
@@ -345,14 +363,16 @@ def main():
                 [(x, 1) for x in raster_path_list], add_arrays, target_path,
                 gdal.GDT_Float32, NODATA),
             kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
-            target_path_list=[target_path]
+            target_path_list=[target_path],
+            task_name='raster_calculator'
             )
 
     kernel_path = os.path.join(WORKSPACE_DIR, 'box_kernel.tif')
     kernel_task = task_graph.add_task(
         func=step_kernel,
         args=(2, kernel_path),
-        target_path_list=[kernel_path])
+        target_path_list=[kernel_path],
+        task_name='step_kernel')
 
     hab_in_2km_path_id_map = {
         'nathab': os.path.join(
@@ -373,7 +393,8 @@ def main():
             gdal.GDT_Byte, 2),
         kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
         target_path_list=[classified_ag_path],
-        dependent_task_list=[sumtask_id_map['ag']]
+        dependent_task_list=[sumtask_id_map['ag']],
+        task_name='raster_calculator'
         )
 
     masked_hab_path_id_map = {
@@ -399,8 +420,8 @@ def main():
                 'gtiff_creation_options': GTIFF_CREATION_OPTIONS,
                 },
             target_path_list=[hab_in_2km_path_id_map[hab_id]],
-            dependent_task_list=[kernel_task, sumtask_id_map[hab_id]])
-
+            dependent_task_list=[kernel_task, sumtask_id_map[hab_id]],
+            task_name='convolve_2d')
 
         # task_list[0] is the task for ag_proportion_path
         mask_habitat_cropland_task = task_graph.add_task(
@@ -413,7 +434,8 @@ def main():
             kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
             target_path_list=[masked_hab_path_id_map[hab_id]],
             dependent_task_list=[
-                classify_cropland_task, habitat_proportion_task]
+                classify_cropland_task, habitat_proportion_task],
+            task_name='raster_calculator'
             )
 
     task_graph.close()

@@ -34,9 +34,8 @@ for path in POSSIBLE_DROPBOX_LOCATIONS:
     if os.path.exists(path):
         BASE_DROPBOX_DIR = path
         break
-LUH2_1KM_ag_and_cover_as_geotiff
 LUH2_BASE_DATA_DIR = os.path.join(
-    BASE_DROPBOX_DIR, 'ipbesdata', 'LUH2_1KM_ag_and_cover_as_geotiff')
+    BASE_DROPBOX_DIR, 'ipbes-data', 'LUH2_1KM_ag_and_cover_as_geotiff')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'Monfreda maps')

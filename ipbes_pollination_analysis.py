@@ -419,6 +419,7 @@ def main():
             crop_categories_table[crop_filter_series][
                 'earthstat_filename_prefix'])
 
+    micronutrient_functional_yield_map = {}
     for (c_type, period), crop_id_list in (
             crop_id_functional_type_map.iteritems()):
         for micronutrient_id in MICRONUTRIENT_LIST:
@@ -486,69 +487,14 @@ def main():
                 task_name='raster_calculator_sum_total_micronutrient'
             )
 
-            # At 1 km LUH2 data, subtract pollinator dependent from total micronutrient production for any grid cells < 0.30; keep it at total for micronutrient production for any grid cells >0.30
-
-            # we need to align the lh2 and yield rasters so they're the
-            # same overlap and pixel size
-            luh2_raster_path = RASTER_FUNCTIONAL_TYPE_MAP[(c_type, period)]
-            luh2_raster_info = pygeoprocessing.get_raster_info(
-                luh2_raster_path)
-
-            # put aligned rasters in a subdirectory
-            target_aligned_rasters = [
-                os.path.join(
-                    WORKSPACE_DIR, 'aligned_rasters',
-                    'aligned_%s_%s_%s_rasters' % (
-                        c_type, period, micronutrient_id),
-                    os.path.basename(x)) for x in [
-                        luh2_raster_path,
-                        total_micronutrient_functional_yield_path,
-                        pol_dep_micronutrient_functional_yield_path]]
-
-            # clip and align the yield and LUH2 rasters to be the intersection
-            # of bounding boxes and the pixel size of LUH2
-            align_luh2_task = task_graph.add_task(
-                func=pygeoprocessing.align_and_resize_raster_stack,
-                args=(
-                    [luh2_raster_path,
-                     total_micronutrient_functional_yield_path,
-                     pol_dep_micronutrient_functional_yield_path],
-                    target_aligned_rasters,
-                    ['nearest']*3, luh2_raster_info['pixel_size'],
-                    'intersection'),
-                kwargs={
-                    'raster_align_index': 0,
-                    'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
-                target_path_list=target_aligned_rasters,
-                dependent_task_list=[pol_dep_micro_task, total_micro_task],
-                task_name='align_resize_raster_%s' % str(
-                    (c_type, period, micronutrient_id)))
-
-            pol_dep_risk_path = os.path.join(
-                WORKSPACE_DIR, 'LUH2_risk_%s_%s_%s_yield.tif' % (
-                    micronutrient_id, c_type, period))
-
-            # the 0.3 comes from Becky saying that's where we should threshold
-            pol_dep_risk_task = task_graph.add_task(
-                func=MicroNutrientRiskThreshold(
-                    target_aligned_rasters, POL_DEP_THRESHOLD, pol_dep_risk_path),
-                target_path_list=[pol_dep_risk_path],
-                dependent_task_list=[align_luh2_task],
-                task_name='MicroNutrientRiskThreshold_%s' % str(
-                    (micronutrient_id, c_type, period)))
-
-            # 0 is LUH and 2 is pol dep
-            pol_dep_loss_path = os.path.join(
-                WORKSPACE_DIR, 'LUH2_pol_dep_loss_%s_%s_%s_yield.tif' % (
-                    micronutrient_id, c_type, period))
-            pol_dep_mask = task_graph.add_task(
-                func=MaskAtThreshold(
-                    target_aligned_rasters[0], target_aligned_rasters[2],
-                    POL_DEP_THRESHOLD, pol_dep_loss_path),
-                target_path_list=[pol_dep_loss_path],
-                dependent_task_list=[align_luh2_task],
-                task_name='MaskAtThreshold_%s' % str(
-                    (micronutrient_id, c_type, period)))
+            # we'll use this later when combining with the proportion of
+            # natural habitat and grassland habitat
+            micronutrient_functional_yield_map[
+                (micronutrient_id, c_type, period)] = (
+                    pol_dep_micronutrient_functional_yield_path,
+                    pol_dep_micro_task,
+                    total_micronutrient_functional_yield_path,
+                    total_micro_task)
 
     crop_path_list = [
         os.path.join(LUH2_BASE_DATA_DIR, "c3ann.tif"),
@@ -630,7 +576,7 @@ def main():
         'nathabgrass': os.path.join(
             WORKSPACE_DIR, 'nathabgrass_agmasked_proportion_within_2km.tif'),
     }
-
+    masked_hab_tasks = []
     for hab_id, hab_path in nathabpath_id_map.iteritems():
         # task_list[1] is the habitat classer task
         habitat_proportion_task = task_graph.add_task(
@@ -649,6 +595,7 @@ def main():
             target_path_list=[hab_in_2km_path_id_map[hab_id]],
             dependent_task_list=[kernel_task, sumtask_id_map[hab_id]],
             task_name='convolve_2d')
+        masked_hab_tasks.append(habitat_proportion_task)
 
         # task_list[0] is the task for ag_proportion_path
         mask_habitat_cropland_task = task_graph.add_task(
@@ -664,6 +611,84 @@ def main():
                 classify_cropland_task, habitat_proportion_task],
             task_name='raster_calculator'
             )
+
+    # At 1 km LUH2 data, subtract pollinator dependent from total micronutrient production for any grid cells < 0.30; keep it at total for micronutrient production for any grid cells >0.30
+    for micronutrient_key in micronutrient_functional_yield_map:
+        (pol_dep_micronutrient_functional_yield_path,
+         pol_dep_micro_task,
+         total_micronutrient_functional_yield_path,
+         total_micro_task) = micronutrient_functional_yield_map[
+            micronutrient_key]
+        """micronutrient_functional_yield_map[
+            (micronutrient_id, c_type, period)] = (
+                pol_dep_micronutrient_functional_yield_path,
+                pol_dep_micro_task,
+                total_micronutrient_functional_yield_path,
+                total_micro_task)"""
+
+        # put aligned rasters in a subdirectory
+        base_luh_raster_info = pygeoprocessing.get_raster_info(
+            masked_hab_path_id_map['nathab'])
+        target_aligned_rasters = [
+            os.path.join(
+                WORKSPACE_DIR, 'aligned_rasters',
+                'aligned_%s_rasters' % micronutrient_key,
+                os.path.basename(x)) for x in [
+                    masked_hab_path_id_map['nathab'],
+                    masked_hab_path_id_map['nathabgrass'],
+                    total_micronutrient_functional_yield_path,
+                    pol_dep_micronutrient_functional_yield_path]]
+
+        # clip and align the yield and LUH2 rasters to be the intersection
+        # of bounding boxes and the pixel size of LUH2
+        align_raster_task = task_graph.add_task(
+            func=pygeoprocessing.align_and_resize_raster_stack,
+            args=(
+                [masked_hab_path_id_map['nathab'],
+                 masked_hab_path_id_map['nathabgrass'],
+                 total_micronutrient_functional_yield_path,
+                 pol_dep_micronutrient_functional_yield_path],
+                target_aligned_rasters,
+                ['nearest']*4, base_luh_raster_info['pixel_size'],
+                'intersection'),
+            kwargs={
+                'raster_align_index': 0,
+                'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
+            target_path_list=target_aligned_rasters,
+            dependent_task_list=masked_hab_tasks+[
+                pol_dep_micro_task, total_micro_task],
+            task_name='align_resize_raster_%s' % str(
+                micronutrient_key))
+
+        for hab_id, raster_index in [('nathab', 0), ('nathabgrass', 1)]:
+            hab_risk_path = os.path.join(
+                WORKSPACE_DIR, '%s_risk_%s_yield.tif' % (
+                    hab_id, micronutrient_key))
+
+            # the 0.3 comes from Becky saying that's where we should threshold
+            nathab_risk_task = task_graph.add_task(
+                func=MicroNutrientRiskThreshold(
+                    [target_aligned_rasters[raster_index]]+
+                    target_aligned_rasters[2:], POL_DEP_THRESHOLD,
+                    hab_risk_path),
+                target_path_list=[hab_risk_path],
+                dependent_task_list=[align_raster_task],
+                task_name='MicroNutrientRiskThreshold_%s' % str(
+                    (hab_id, micronutrient_key)))
+
+            # calculate the pure loss
+            pol_dep_loss_path = os.path.join(
+                WORKSPACE_DIR, '%s_pol_dep_loss_%s_yield.tif' % (
+                    hab_id, micronutrient_key))
+            pol_dep_mask = task_graph.add_task(
+                func=MaskAtThreshold(
+                    target_aligned_rasters[raster_index],
+                    target_aligned_rasters[3],
+                    POL_DEP_THRESHOLD, pol_dep_loss_path),
+                target_path_list=[pol_dep_loss_path],
+                dependent_task_list=[align_raster_task],
+                task_name='MaskAtThreshold_%s' % str(
+                    (hab_id, micronutrient_key)))
 
     LOGGER.info("closing and joining taskgraph")
     task_graph.close()

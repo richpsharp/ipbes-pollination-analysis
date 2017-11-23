@@ -34,7 +34,7 @@ POSSIBLE_DROPBOX_LOCATIONS = [
 for path in POSSIBLE_DROPBOX_LOCATIONS:
     if os.path.exists(path):
         BASE_DROPBOX_DIR = path
-    break
+        break
 
 LUH2_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-pollination-analysis', 'LUH2_1KM')

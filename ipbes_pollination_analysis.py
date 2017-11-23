@@ -37,7 +37,7 @@ for path in POSSIBLE_DROPBOX_LOCATIONS:
         break
 
 LUH2_BASE_DATA_DIR = os.path.join(
-    BASE_DROPBOX_DIR, 'ipbes-pollination-analysis', 'LUH2_1KM')
+    BASE_DROPBOX_DIR, 'LUH2_1KM_as_geotiff')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'Monfreda maps')
@@ -50,56 +50,17 @@ CROP_CATEGORIES_TABLE_PATH = os.path.join(
 MICRONUTRIENT_LIST = ['Energy', 'VitA', 'Fe', 'Folate']
 
 RASTER_FUNCTIONAL_TYPE_MAP = {
-    ("C3", "annual"): os.path.join(LUH2_BASE_DATA_DIR, 'c3ann.flt'),
-    ("C3", "perennial"): os.path.join(LUH2_BASE_DATA_DIR, 'c3per.flt'),
-    ("C4", "annual"): os.path.join(LUH2_BASE_DATA_DIR, 'c4ann.flt'),
-    ("C4", "perennial"): os.path.join(LUH2_BASE_DATA_DIR, 'c4per.flt'),
-    ("N-fixer", None): os.path.join(LUH2_BASE_DATA_DIR, 'c3nfx.flt')
+    ("C3", "annual"): os.path.join(LUH2_BASE_DATA_DIR, 'c3ann.tif'),
+    ("C3", "perennial"): os.path.join(LUH2_BASE_DATA_DIR, 'c3per.tif'),
+    ("C4", "annual"): os.path.join(LUH2_BASE_DATA_DIR, 'c4ann.tif'),
+    ("C4", "perennial"): os.path.join(LUH2_BASE_DATA_DIR, 'c4per.tif'),
+    ("N-fixer", None): os.path.join(LUH2_BASE_DATA_DIR, 'c3nfx.tif')
 }
 
 TARGET_CROP_FILE_DIR = os.path.join(
     WORKSPACE_DIR, 'crop_geotiffs')
 TARGET_MICRONUTRIENT_DIR = os.path.join(
     WORKSPACE_DIR, 'micronutrient_working_files')
-
-
-def asc_to_tiff(base_path, target_path):
-    """Convert base .asc.zip to target .tif w/ a WGS84 coordinate system."""
-    tmp_asc_path = os.path.splitext(base_path)[0]
-    if not os.path.exists(os.path.dirname(target_path)):
-        os.makedirs(os.path.dirname(target_path))
-    cmd = 'unzip -o "%s" -d "%s"' % (
-        base_path, os.path.dirname(base_path))
-    print cmd
-    subprocess.call(cmd)
-    with open(tmp_asc_path, 'rb') as base_file:
-        for _ in xrange(6):
-            base_file.readline()
-        array = numpy.empty((2160, 4320), dtype=numpy.float32)
-        running_array = []
-        for line in base_file:
-            running_array += [float(x) for x in ' '.join(line.split()).split()]
-        # this is hard-coded from the Montfrida maps so putting assert here
-        # in case I blindly copy it somewhere else someday
-        assert(len(running_array) == 2160*4320)
-        array[:] = numpy.array(
-            [float(x) for x in running_array]).reshape(2160, 4320)
-    os.remove(tmp_asc_path)
-    driver = gdal.GetDriverByName('GTiff')
-    target_raster = driver.Create(
-        target_path.encode('utf-8'), 4320, 2160, 1, gdal.GDT_Float32,
-        options=GTIFF_CREATION_OPTIONS)
-    target_projection = osr.SpatialReference()
-    target_projection.ImportFromEPSG(4326)
-    target_raster.SetProjection(target_projection.ExportToWkt())
-    target_raster.SetGeoTransform([
-        -180.0000, 8.3333001E-02, 0, 90.00000, 0, -8.3333001E-02])
-    target_band = target_raster.GetRasterBand(1)
-    target_band.SetNoDataValue(NODATA)
-    target_band.WriteArray(array)
-    target_band.FlushCache()
-    target_band = None
-    target_raster = None
 
 
 def threshold_crop_raster(array):
@@ -581,28 +542,24 @@ def main():
                 task_name='MaskAtThreshold_%s' % str(
                     (micronutrient_id, c_type, period)))
 
-    LOGGER.info("joining taskgraph")
-    task_graph.join()
-    return
-
     crop_path_list = [
-        os.path.join(LUH2_BASE_DATA_DIR, "c3ann.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "c3nfx.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "c3per.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "c4ann.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "c4per.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c3ann.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c3nfx.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c3per.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c4ann.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "c4per.tif"),
     ]
 
     habitat_path_list = [
-        os.path.join(LUH2_BASE_DATA_DIR, "primf.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "primn.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "secdf.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "secdn.flt"),
+        os.path.join(LUH2_BASE_DATA_DIR, "primf.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "primn.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "secdf.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "secdn.tif"),
     ]
 
     grass_path_list = [
-        os.path.join(LUH2_BASE_DATA_DIR, "pastr.flt"),
-        os.path.join(LUH2_BASE_DATA_DIR, "range.flt")
+        os.path.join(LUH2_BASE_DATA_DIR, "pastr.tif"),
+        os.path.join(LUH2_BASE_DATA_DIR, "range.tif")
     ]
 
     ag_proportion_path = os.path.join(WORKSPACE_DIR, 'ag_proportion.tif')
@@ -700,6 +657,7 @@ def main():
             task_name='raster_calculator'
             )
 
+    LOGGER.info("closing and joining taskgraph")
     task_graph.close()
     task_graph.join()
 

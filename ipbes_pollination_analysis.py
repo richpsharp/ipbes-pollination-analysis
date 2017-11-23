@@ -405,8 +405,6 @@ def main():
             micronutrient_yield_path = os.path.splitext(
                 target_crop_total_yield_path_id_map[crop_id])[0] + (
                     '_%s.tif' % (micronutrient_id))
-            total_micronutrient_yield_path_id_map[
-                (micronutrient_id, crop_id)] = micronutrient_yield_path
 
             # the 1e4 converts the Mg to g for nutrient units
             micronutrient_task = task_graph.add_task(
@@ -420,12 +418,14 @@ def main():
                 task_name='MultRastersAndScalar_%s' % micronutrient_yield_path
                 )
 
+            # record the path and the task for later
+            total_micronutrient_yield_path_id_map[
+                (micronutrient_id, crop_id)] = (
+                    micronutrient_yield_path, micronutrient_task)
+
             pollinator_dependent_micronutrient_yield_path = os.path.splitext(
                 micronutrient_yield_path)[0] + '_%s.tif' % 'pol_dep'
 
-            pollinator_dependent_micronutrient_yield_path_id_map[
-                (micronutrient_id, crop_id)] = (
-                pollinator_dependent_micronutrient_yield_path)
             pollinator_dependent_micronutrient_task = task_graph.add_task(
                 func=MultRastersAndScalar(
                     [micronutrient_yield_path],
@@ -437,6 +437,11 @@ def main():
                 dependent_task_list=[micronutrient_task],
                 task_name='MultRastersAndScalar'
                 )
+            pollinator_dependent_micronutrient_yield_path_id_map[
+                (micronutrient_id, crop_id)] = (
+                pollinator_dependent_micronutrient_yield_path,
+                pollinator_dependent_micronutrient_task)
+
 
     # Now we do this:
     """Sum up all the crops in each functional group: c3ann, c3per, c4ann, c4per, c3nfx (Becky to classify in table) = c3ann vitamin A total and pollinator dependent production - for current, at 10 km resolution"""
@@ -463,7 +468,11 @@ def main():
 
             pollinator_functional_crop_path_list = [
                 pollinator_dependent_micronutrient_yield_path_id_map[
-                    (micronutrient_id, crop_id)]
+                    (micronutrient_id, crop_id)][0]
+                for crop_id in crop_id_list if crop_id in dep_pol_id_map]
+            pollinator_functional_crop_task_list = [
+                pollinator_dependent_micronutrient_yield_path_id_map[
+                    (micronutrient_id, crop_id)][1]
                 for crop_id in crop_id_list if crop_id in dep_pol_id_map]
 
             pol_dep_micro_task = task_graph.add_task(
@@ -475,6 +484,7 @@ def main():
                     gdal.GDT_Float32, NODATA),
                 kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
                 target_path_list=[pol_dep_micronutrient_functional_yield_path],
+                dependent_task_list=pollinator_functional_crop_task_list,
                 task_name='raster_calculator_sum_pol_dep_micronutrient'
             )
 
@@ -483,7 +493,13 @@ def main():
                     micronutrient_id, c_type, period))
 
             total_functional_crop_path_list = [
-                total_micronutrient_yield_path_id_map[(micronutrient_id, crop_id)]
+                total_micronutrient_yield_path_id_map[
+                    (micronutrient_id, crop_id)][0]
+                for crop_id in crop_id_list if crop_id in dep_pol_id_map]
+
+            total_functional_crop_task_list = [
+                total_micronutrient_yield_path_id_map[
+                    (micronutrient_id, crop_id)][1]
                 for crop_id in crop_id_list if crop_id in dep_pol_id_map]
 
             total_micro_task = task_graph.add_task(
@@ -495,6 +511,7 @@ def main():
                     gdal.GDT_Float32, NODATA),
                 kwargs={'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
                 target_path_list=[total_micronutrient_functional_yield_path],
+                dependent_task_list=total_functional_crop_task_list,
                 task_name='raster_calculator_sum_total_micronutrient'
             )
 

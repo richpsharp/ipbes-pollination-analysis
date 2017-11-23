@@ -576,7 +576,6 @@ def main():
         'nathabgrass': os.path.join(
             WORKSPACE_DIR, 'nathabgrass_agmasked_proportion_within_2km.tif'),
     }
-    masked_hab_tasks = []
     for hab_id, hab_path in nathabpath_id_map.iteritems():
         # task_list[1] is the habitat classer task
         habitat_proportion_task = task_graph.add_task(
@@ -595,7 +594,6 @@ def main():
             target_path_list=[hab_in_2km_path_id_map[hab_id]],
             dependent_task_list=[kernel_task, sumtask_id_map[hab_id]],
             task_name='convolve_2d')
-        masked_hab_tasks.append(habitat_proportion_task)
 
         # task_list[0] is the task for ag_proportion_path
         mask_habitat_cropland_task = task_graph.add_task(
@@ -628,14 +626,14 @@ def main():
 
         # put aligned rasters in a subdirectory
         base_luh_raster_info = pygeoprocessing.get_raster_info(
-            masked_hab_path_id_map['nathab'])
+            crop_path_list[0])
         target_aligned_rasters = [
             os.path.join(
                 WORKSPACE_DIR, 'aligned_rasters',
-                'aligned_%s_rasters' % micronutrient_key,
+                'aligned_%s_rasters' % str(micronutrient_key),
                 os.path.basename(x)) for x in [
-                    masked_hab_path_id_map['nathab'],
-                    masked_hab_path_id_map['nathabgrass'],
+                    nathabpath_id_map['nathab'],
+                    nathabpath_id_map['nathabgrass'],
                     total_micronutrient_functional_yield_path,
                     pol_dep_micronutrient_functional_yield_path]]
 
@@ -644,8 +642,8 @@ def main():
         align_raster_task = task_graph.add_task(
             func=pygeoprocessing.align_and_resize_raster_stack,
             args=(
-                [masked_hab_path_id_map['nathab'],
-                 masked_hab_path_id_map['nathabgrass'],
+                [nathabpath_id_map['nathab'],
+                 nathabpath_id_map['nathabgrass'],
                  total_micronutrient_functional_yield_path,
                  pol_dep_micronutrient_functional_yield_path],
                 target_aligned_rasters,
@@ -655,7 +653,7 @@ def main():
                 'raster_align_index': 0,
                 'gtiff_creation_options': GTIFF_CREATION_OPTIONS},
             target_path_list=target_aligned_rasters,
-            dependent_task_list=masked_hab_tasks+[
+            dependent_task_list=sumtask_id_map.values()+[
                 pol_dep_micro_task, total_micro_task],
             task_name='align_resize_raster_%s' % str(
                 micronutrient_key))

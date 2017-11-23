@@ -463,7 +463,8 @@ def main():
         for micronutrient_id in MICRONUTRIENT_LIST:
             # calculate both the total and pollinator dependent micronutrient
             pol_dep_micronutrient_functional_yield_path = os.path.join(
-                WORKSPACE_DIR, 'pol_dep_%s_%s_%s_yield.tif' % (
+                WORKSPACE_DIR, 'functional_group_yields',
+                '%s_%s_%s_yield_pol_dep.tif' % (
                     micronutrient_id, c_type, period))
 
             pollinator_functional_crop_path_list = [
@@ -489,7 +490,8 @@ def main():
             )
 
             total_micronutrient_functional_yield_path = os.path.join(
-                WORKSPACE_DIR, 'total_%s_%s_%s_yield.tif' % (
+                WORKSPACE_DIR, 'functional_group_yields',
+                '%s_%s_%s_yield_total.tif' % (
                     micronutrient_id, c_type, period))
 
             total_functional_crop_path_list = [
@@ -526,7 +528,8 @@ def main():
             # put aligned rasters in a subdirectory
             target_aligned_rasters = [
                 os.path.join(
-                    WORKSPACE_DIR, 'aligned_%s_%s_%s_rasters' % (
+                    WORKSPACE_DIR, 'aligned_rasters',
+                    'aligned_%s_%s_%s_rasters' % (
                         c_type, period, micronutrient_id),
                     os.path.basename(x)) for x in [
                         luh2_raster_path,

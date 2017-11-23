@@ -2,7 +2,6 @@
 import os
 import errno
 import logging
-import subprocess
 import hashlib
 import inspect
 
@@ -35,9 +34,9 @@ for path in POSSIBLE_DROPBOX_LOCATIONS:
     if os.path.exists(path):
         BASE_DROPBOX_DIR = path
         break
-
+LUH2_1KM_ag_and_cover_as_geotiff
 LUH2_BASE_DATA_DIR = os.path.join(
-    BASE_DROPBOX_DIR, 'LUH2_1KM_as_geotiff')
+    BASE_DROPBOX_DIR, 'ipbesdata', 'LUH2_1KM_ag_and_cover_as_geotiff')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'Monfreda maps')
@@ -403,7 +402,6 @@ def main():
                 pollinator_dependent_micronutrient_yield_path,
                 pollinator_dependent_micronutrient_task)
 
-
     # Now we do this:
     """Sum up all the crops in each functional group: c3ann, c3per, c4ann, c4per, c3nfx (Becky to classify in table) = c3ann vitamin A total and pollinator dependent production - for current, at 10 km resolution"""
     crop_categories_table = pandas.read_csv(CROP_CATEGORIES_TABLE_PATH)
@@ -666,7 +664,7 @@ def main():
             # the 0.3 comes from Becky saying that's where we should threshold
             nathab_risk_task = task_graph.add_task(
                 func=MicroNutrientRiskThreshold(
-                    [target_aligned_rasters[raster_index]]+
+                    [target_aligned_rasters[raster_index]] +
                     target_aligned_rasters[2:], POL_DEP_THRESHOLD,
                     hab_risk_path),
                 target_path_list=[hab_risk_path],

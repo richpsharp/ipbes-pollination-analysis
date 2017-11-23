@@ -467,6 +467,14 @@ def main():
                 '%s_%s_%s_yield_pol_dep.tif' % (
                     micronutrient_id, c_type, period))
 
+            # create a directory for the ouput file if it doesn't exist
+            try:
+                os.makedirs(os.path.dirname(
+                    pol_dep_micronutrient_functional_yield_path))
+            except OSError as exception:
+                if exception.errno != errno.EEXIST:
+                    raise
+
             pollinator_functional_crop_path_list = [
                 pollinator_dependent_micronutrient_yield_path_id_map[
                     (micronutrient_id, crop_id)][0]

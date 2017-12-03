@@ -10,12 +10,14 @@ from osgeo import gdal
 import taskgraph
 import pygeoprocessing
 import numpy
+import scipy.ndimage.morphology
 import pandas
 
 N_WORKERS = 4
 POL_DEP_THRESHOLD = 0.3
 GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
 NODATA = -9999
+MASK_NODATA = 2
 
 # any proportion of ag above this is classified as a crop
 CROP_THRESHOLD_VALUE = 0.05
@@ -40,7 +42,7 @@ GLOBIO_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'GLOBIO4_LU_10sec_2050_SSP_1_3_5')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
-    BASE_DROPBOX_DIR, 'Monfreda maps')
+    BASE_DROPBOX_DIR, 'ipbes-data', 'Monfreda maps')
 BASE_CROP_RASTER_DIR = os.path.join(
     BASE_CROP_DATA_DIR, 'crop_rasters_as_geotiff')
 CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, 'crop_info.csv')
@@ -49,11 +51,11 @@ CROP_CATEGORIES_TABLE_PATH = os.path.join(
 
 GLOBIO_LU_MAPS = {
     'ssp1': os.path.join(
-        BASE_DROPBOX_DIR, 'GLOBIO4_LU_10sec_2050_SSP1_RCP26.tif'),
+        GLOBIO_BASE_DATA_DIR, 'GLOBIO4_LU_10sec_2050_SSP1_RCP26.tif'),
     'ssp3': os.path.join(
-        BASE_DROPBOX_DIR, 'GLOBIO4_LU_10sec_2050_SSP3_RCP70.tif'),
+        GLOBIO_BASE_DATA_DIR, 'GLOBIO4_LU_10sec_2050_SSP3_RCP70.tif'),
     'ssp5': os.path.join(
-        BASE_DROPBOX_DIR, 'GLOBIO4_LU_10sec_2050_SSP1_RCP85.tif'),
+        GLOBIO_BASE_DATA_DIR, 'GLOBIO4_LU_10sec_2050_SSP5_RCP85.tif'),
 }
 
 GLOBIO_NATHAB_CODES = [
@@ -73,6 +75,8 @@ RASTER_FUNCTIONAL_TYPE_MAP = {
     ("N-fixer", None): os.path.join(LUH2_BASE_DATA_DIR, 'c3nfx.tif')
 }
 
+TARGET_GLOBIO_MASKS = os.path.join(
+    WORKSPACE_DIR, 'globio_masks')
 TARGET_CROP_FILE_DIR = os.path.join(
     WORKSPACE_DIR, 'crop_geotiffs')
 TARGET_MICRONUTRIENT_DIR = os.path.join(
@@ -131,7 +135,7 @@ def add_arrays_passthrough_nodata(*array_list):
 
 
 def step_kernel(n_pixels, kernel_filepath):
-    """Create a box kernel of 1+2*n_pixels."""
+    """Create a box circle kernel of 1+2*n_pixels."""
 
     kernel_size = 1+2*n_pixels
     driver = gdal.GetDriverByName('GTiff')
@@ -151,7 +155,10 @@ def step_kernel(n_pixels, kernel_filepath):
 
     kernel_band = kernel_dataset.GetRasterBand(1)
     kernel_band.SetNoDataValue(NODATA)
-    kernel_band.Fill(1)
+    mask_array = numpy.ones((kernel_size, kernel_size))
+    mask_array[n_pixels, n_pixels] = 0
+    dist_array = scipy.ndimage.morphology.distance_transform_edt(mask_array)
+    kernel_band.WriteArray(dist_array < kernel_size)
 
 
 class MaskAtThreshold(object):
@@ -321,13 +328,103 @@ class MultRastersAndScalar(object):
             gdal.GDT_Float32, NODATA,
             gtiff_creation_options=GTIFF_CREATION_OPTIONS)
 
+
+class MaskByRasterValue(object):
+    """Mask a given raster by a given list of pixel values."""
+
+    def __init__(
+            self, base_raster_path_band, mask_list, target_path):
+        try:
+            self.__name__ = hashlib.sha1(inspect.getsource(
+                MaskByRasterValue.__call__)).hexdigest()
+        except IOError:
+            # default to the classname if it doesn't work
+            self.__name__ = MaskByRasterValue.__name__
+        self.__name__ += str([
+            base_raster_path_band, mask_list, target_path])
+        self.base_raster_path_band = base_raster_path_band
+        self.target_path = target_path
+        self.mask_list = numpy.array(mask_list)
+
+    def __call__(self):
+        try:
+            os.makedirs(os.path.dirname(self.target_path))
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
+
+        base_nodata = pygeoprocessing.get_raster_info(
+            self.base_raster_path_band[0])['nodata'][
+                self.base_raster_path_band[1]-1]
+
+        def mask_values_op(base_array):
+            valid_mask = base_array != base_nodata
+            result = numpy.empty(base_array.shape, dtype=numpy.int8)
+            result[:] = MASK_NODATA
+            result[valid_mask] = numpy.in1d(
+                base_array[valid_mask], self.mask_list)
+            return result
+
+        pygeoprocessing.raster_calculator(
+            [self.base_raster_path_band],
+            mask_values_op, self.target_path,
+            gdal.GDT_Byte, MASK_NODATA,
+            gtiff_creation_options=GTIFF_CREATION_OPTIONS)
+
+
 def main():
     """Entry point."""
+    LOGGER.info("starting %s" % __name__)
     if not os.path.exists(WORKSPACE_DIR):
         os.makedirs(WORKSPACE_DIR)
 
     task_graph = taskgraph.TaskGraph(
         os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), N_WORKERS)
+
+    # for globio / ESA rasters
+    globio_kernel_path = os.path.join(WORKSPACE_DIR, 'globio_box_kernel.tif')
+    # 7 pixels since 2000 / 300 = 6.66
+    globio_kernel_task = task_graph.add_task(
+        func=step_kernel,
+        args=(7, globio_kernel_path),
+        target_path_list=[globio_kernel_path],
+        task_name='globio_step_kernel')
+
+    for mask_hab_id, mask_list in [
+            ('nathab', GLOBIO_NATHAB_CODES),
+            ('nathabgrass', GLOBIO_NATHABGRASS_CODES)]:
+        for globio_raster_key, globio_raster_path in GLOBIO_LU_MAPS.iteritems():
+            #Mask nathab/nathabgrass/ag
+            task_name = 'globio_%s_%s' % (mask_hab_id, globio_raster_key)
+            globio_habmask_path = os.path.join(
+                TARGET_GLOBIO_MASKS, '%s.tif' % task_name)
+            globio_mask_task = task_graph.add_task(
+                func=MaskByRasterValue(
+                    (globio_raster_path, 1), mask_list, globio_habmask_path),
+                target_path_list=[globio_habmask_path],
+                task_name=task_name)
+
+            globio_convolve_task_name = 'globio_prop_hab_%s' % mask_hab_id
+            globio_hab_prop_path = os.path.join(
+                TARGET_GLOBIO_MASKS, '%s.tif' % globio_convolve_task_name)
+            habitat_proportion_task = task_graph.add_task(
+                func=pygeoprocessing.convolve_2d,
+                args=(
+                    (globio_habmask_path, 1), (globio_kernel_path, 1),
+                    globio_hab_prop_path),
+                kwargs={
+                    'ignore_nodata': True,
+                    'mask_nodata': True,
+                    'normalize_kernel': True,
+                    'target_datatype': gdal.GDT_Float32,
+                    'target_nodata': NODATA,
+                    'gtiff_creation_options': GTIFF_CREATION_OPTIONS,
+                    },
+                target_path_list=[globio_hab_prop_path],
+                dependent_task_list=[globio_kernel_task, globio_mask_task],
+                task_name=globio_convolve_task_name)
+    #Convolve nathab/nathabgrass
+    #Mask convolution of nathab/nathabgrass w/ ag
 
     crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 

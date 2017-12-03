@@ -76,7 +76,7 @@ RASTER_FUNCTIONAL_TYPE_MAP = {
     ("N-fixer", None): os.path.join(LUH2_BASE_DATA_DIR, 'c3nfx.tif')
 }
 
-TARGET_GLOBIO_MASKS = os.path.join(
+TARGET_GLOBIO_WORKING_DIR = os.path.join(
     WORKSPACE_DIR, 'globio_masks')
 TARGET_CROP_FILE_DIR = os.path.join(
     WORKSPACE_DIR, 'crop_geotiffs')
@@ -159,7 +159,7 @@ def step_kernel(n_pixels, kernel_filepath):
     mask_array = numpy.ones((kernel_size, kernel_size))
     mask_array[n_pixels, n_pixels] = 0
     dist_array = scipy.ndimage.morphology.distance_transform_edt(mask_array)
-    kernel_band.WriteArray(dist_array < kernel_size)
+    kernel_band.WriteArray(dist_array < n_pixels)
 
 
 class MaskAtThreshold(object):
@@ -354,6 +354,9 @@ class MaskByRasterValue(object):
             if exception.errno != errno.EEXIST:
                 raise
 
+        LOGGER.debug(
+            "MaskByRasterValue\n\t%s\n\t%s\n\t%s", self.base_raster_path_band,
+            self.mask_list, self.target_path)
         base_nodata = pygeoprocessing.get_raster_info(
             self.base_raster_path_band[0])['nodata'][
                 self.base_raster_path_band[1]-1]
@@ -398,16 +401,18 @@ def main():
             #Mask nathab/nathabgrass/ag
             task_name = 'globio_%s_%s' % (mask_hab_id, globio_raster_key)
             globio_habmask_path = os.path.join(
-                TARGET_GLOBIO_MASKS, '%s.tif' % task_name)
+                TARGET_GLOBIO_WORKING_DIR, '%s.tif' % task_name)
             globio_mask_task = task_graph.add_task(
                 func=MaskByRasterValue(
                     (globio_raster_path, 1), mask_list, globio_habmask_path),
                 target_path_list=[globio_habmask_path],
                 task_name=task_name)
 
-            globio_convolve_task_name = 'globio_prop_hab_%s' % mask_hab_id
+            globio_convolve_task_name = 'globio_prop_hab_%s_%s' % (
+                mask_hab_id, globio_raster_key)
             globio_hab_prop_path = os.path.join(
-                TARGET_GLOBIO_MASKS, '%s.tif' % globio_convolve_task_name)
+                TARGET_GLOBIO_WORKING_DIR,
+                '%s.tif' % globio_convolve_task_name)
             habitat_proportion_task = task_graph.add_task(
                 func=pygeoprocessing.convolve_2d,
                 args=(

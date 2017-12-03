@@ -36,6 +36,8 @@ for path in POSSIBLE_DROPBOX_LOCATIONS:
         break
 LUH2_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'LUH2_1KM_ag_and_cover_as_geotiff')
+GLOBIO_BASE_DATA_DIR = os.path.join(
+    BASE_DROPBOX_DIR, 'ipbes-data', 'GLOBIO4_LU_10sec_2050_SSP_1_3_5')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'Monfreda maps')
@@ -44,6 +46,24 @@ BASE_CROP_RASTER_DIR = os.path.join(
 CROP_NUTRIENT_TABLE_PATH = os.path.join(BASE_CROP_DATA_DIR, 'crop_info.csv')
 CROP_CATEGORIES_TABLE_PATH = os.path.join(
     BASE_CROP_DATA_DIR, 'earthstat_to_luh_categories.csv')
+
+GLOBIO_LU_MAPS = {
+    'ssp1': os.path.join(
+        BASE_DROPBOX_DIR, 'GLOBIO4_LU_10sec_2050_SSP1_RCP26.tif'),
+    'ssp3': os.path.join(
+        BASE_DROPBOX_DIR, 'GLOBIO4_LU_10sec_2050_SSP3_RCP70.tif'),
+    'ssp5': os.path.join(
+        BASE_DROPBOX_DIR, 'GLOBIO4_LU_10sec_2050_SSP1_RCP85.tif'),
+}
+
+GLOBIO_NATHAB_CODES = [
+    11, 12, 50, 60, 61, 62, 70, 71, 72, 80, 81, 90, 100, 110, 120, 121, 122,
+    140, 150, 152, 153, 160, 170]
+GLOBIO_NATHABGRASS_CODES = [
+    3, 11, 12, 50, 60, 61, 62, 70, 71, 72, 80, 81, 90, 100, 110, 120, 121, 122,
+    130, 140, 150, 152, 153, 160, 170]
+GLOBIO_AG_CODES = [2, 10, 30, 40]
+
 
 MICRONUTRIENT_LIST = ['Energy', 'VitA', 'Fe', 'Folate']
 

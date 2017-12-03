@@ -30,9 +30,9 @@ logging.basicConfig(
 LOGGER = logging.getLogger('ipbes_pollination_analysis')
 
 POSSIBLE_DROPBOX_LOCATIONS = [
+    r'D:\Dropbox',
     r'C:\Users\Rich\Dropbox',
     r'C:\Users\rpsharp\Dropbox',
-    r'D:\Dropbox',
     r'E:\Dropbox']
 for path in POSSIBLE_DROPBOX_LOCATIONS:
     if os.path.exists(path):

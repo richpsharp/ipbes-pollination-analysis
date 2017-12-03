@@ -15,7 +15,8 @@ import pandas
 
 N_WORKERS = 4
 POL_DEP_THRESHOLD = 0.3
-GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
+#GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
+GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER')
 NODATA = -9999
 MASK_NODATA = 2
 
@@ -31,6 +32,7 @@ LOGGER = logging.getLogger('ipbes_pollination_analysis')
 POSSIBLE_DROPBOX_LOCATIONS = [
     r'C:\Users\Rich\Dropbox',
     r'C:\Users\rpsharp\Dropbox',
+    r'D:\Dropbox',
     r'E:\Dropbox']
 for path in POSSIBLE_DROPBOX_LOCATIONS:
     if os.path.exists(path):

@@ -40,7 +40,8 @@ for path in POSSIBLE_DROPBOX_LOCATIONS:
 LUH2_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'LUH2_1KM_ag_and_cover_as_geotiff')
 GLOBIO_BASE_DATA_DIR = os.path.join(
-    BASE_DROPBOX_DIR, 'ipbes-data', 'GLOBIO4_LU_10sec_2050_SSP_1_3_5')
+    BASE_DROPBOX_DIR, 'ipbes-data',
+    'GLOBIO4_landuse_10sec_tifs_20171207_Idiv')
 WORKSPACE_DIR = 'pollination_workspace'
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'Monfreda maps')
@@ -51,12 +52,18 @@ CROP_CATEGORIES_TABLE_PATH = os.path.join(
     BASE_CROP_DATA_DIR, 'earthstat_to_luh_categories.csv')
 
 GLOBIO_LU_MAPS = {
-    'ssp1': os.path.join(
-        GLOBIO_BASE_DATA_DIR, 'GLOBIO4_LU_10sec_2050_SSP1_RCP26.tif'),
-    'ssp3': os.path.join(
-        GLOBIO_BASE_DATA_DIR, 'GLOBIO4_LU_10sec_2050_SSP3_RCP70.tif'),
-    'ssp5': os.path.join(
-        GLOBIO_BASE_DATA_DIR, 'GLOBIO4_LU_10sec_2050_SSP5_RCP85.tif'),
+    '2015': os.path.join(
+        GLOBIO_BASE_DATA_DIR, 'Current2015',
+        'Globio4_landuse_10sec_2015_cropint.tif'),
+    '2050_ssp1_rcp26': os.path.join(
+        GLOBIO_BASE_DATA_DIR, 'SSP1_RCP26',
+        'Globio4_landuse_10sec_2050_cropint.tif')
+    '2050_ssp3_rcp70': : os.path.join(
+        GLOBIO_BASE_DATA_DIR, 'SSP3_RCP70',
+        'Globio4_landuse_10sec_2050_cropint.tif')
+    '2050_ssp5_rcp85': os.path.join(
+        GLOBIO_BASE_DATA_DIR, 'SSP5_RCP85',
+        'Globio4_landuse_10sec_2050_cropint.tif')
 }
 
 GLOBIO_NATHAB_CODES = [
@@ -419,7 +426,7 @@ def main():
                     (globio_habmask_path, 1), (globio_kernel_path, 1),
                     globio_hab_prop_path),
                 kwargs={
-                    'ignore_nodata': True,
+                    'ignore_nodata': False,
                     'mask_nodata': True,
                     'normalize_kernel': True,
                     'target_datatype': gdal.GDT_Float32,

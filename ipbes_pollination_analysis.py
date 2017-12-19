@@ -4,6 +4,7 @@ import errno
 import logging
 import hashlib
 import inspect
+import datetime
 
 from osgeo import osr
 from osgeo import gdal
@@ -42,7 +43,7 @@ LUH2_BASE_DATA_DIR = os.path.join(
 GLOBIO_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data',
     'GLOBIO4_landuse_10sec_tifs_20171207_Idiv')
-WORKSPACE_DIR = 'pollination_workspace'
+WORKSPACE_DIR = os.path.join(BASE_DROPBOX_DIR, 'ipbes_pollination_analysis')
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'Monfreda maps')
 BASE_CROP_RASTER_DIR = os.path.join(
@@ -385,6 +386,11 @@ def main():
     LOGGER.info("starting %s" % __name__)
     if not os.path.exists(WORKSPACE_DIR):
         os.makedirs(WORKSPACE_DIR)
+
+    with open(os.path.join(WORKSPACE_DIR, 'README.txt'), 'w') as readme_file:
+        readme_file.write(
+            "output of `ipbes_pollination_analysis.py` on %s" %
+            datetime.datetime.now())
 
     task_graph = taskgraph.TaskGraph(
         os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), N_WORKERS)

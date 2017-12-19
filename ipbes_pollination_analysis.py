@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import datetime
 import distutils.dir_util
+import traceback
 
 from osgeo import osr
 from osgeo import gdal
@@ -412,10 +413,20 @@ def main():
         os.makedirs(WORKSPACE_DIR)
     if not os.path.exists(FINAL_TARGET_DIR):
         os.makedirs(FINAL_TARGET_DIR)
-    with open(os.path.join(FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
-        readme_file.write(
-            "started `ipbes_pollination_analysis.py` on %s\n" %
-            datetime.datetime.now())
+    readme_path = os.path.join(FINAL_TARGET_DIR, 'README.txt')
+    readme_restarting = False
+    if os.path.exists(readme_path):
+        readme_restarting = True
+    with open(os.path.join(
+            FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
+        if not readme_restarting:
+            readme_file.write(
+                "started `ipbes_pollination_analysis.py` on %s\n" %
+                datetime.datetime.now())
+        else:
+            readme_file.write(
+                "restarting `ipbes_pollination_analysis.py` on %s\n" %
+                datetime.datetime.now())
 
     task_graph = taskgraph.TaskGraph(
         os.path.join(WORKSPACE_DIR, 'taskgraph_cache'), N_WORKERS)
@@ -722,26 +733,38 @@ def main():
     LOGGER.info("closing and joining taskgraph")
     task_graph.close()
 
-    with open(
-            os.path.join(FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
+    with open(os.path.join(
+            FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
         readme_file.write(
             "taskgraph scheduled and closed on %s now we wait\n" %
             datetime.datetime.now())
 
     task_graph.join()
 
-    with open(
-            os.path.join(FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
+    with open(os.path.join(
+            FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
         readme_file.write(
             "copying complete files to this directory on %s\n" %
             datetime.datetime.now())
 
     distutils.dir_util.copy_tree(WORKSPACE_DIR, FINAL_TARGET_DIR)
 
-    with open(
-            os.path.join(FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
+    with open(os.path.join(
+            FINAL_TARGET_DIR, 'README.txt'), 'a') as readme_file:
         readme_file.write(
             "everything done on %s\n" % datetime.datetime.now())
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        with open(
+                os.path.join(FINAL_TARGET_DIR, 'README.txt'),
+                'a') as readme_file:
+            readme_file.write(
+                "something crashed! on %s\n" % datetime.datetime.now())
+            readme_file.write(
+                "here's the error: %s\n" % traceback.format_exec())
+            readme_file.write(
+                "program is ending now you won't see anything else until "
+                "it restarts\n")

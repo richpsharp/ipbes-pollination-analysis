@@ -15,7 +15,7 @@ import pandas
 
 N_WORKERS = 4
 POL_DEP_THRESHOLD = 0.3
-GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=DEFLATE')
+GTIFF_CREATION_OPTIONS = ('TILED=YES', 'BIGTIFF=IF_SAFER', 'COMPRESS=LZW')
 NODATA = -9999
 MASK_NODATA = 2
 
@@ -66,12 +66,9 @@ GLOBIO_LU_MAPS = {
         'Globio4_landuse_10sec_2050_cropint.tif')
 }
 
-GLOBIO_NATHAB_CODES = [
-    50, 60, 61, 62, 70, 71, 72, 80, 81, 90, 100, 110, 120, 121, 122,
-    140, 150, 152, 153]
-GLOBIO_NATHABGRASS_CODES = GLOBIO_NATHAB_CODES + [3, 130]
-GLOBIO_AG_CODES = [2, 10, 11, 12, 20, 30, 40]
-
+GLOBIO_NATHAB_CODES = [6] + range(50, 181)
+GLOBIO_SEMINAT_CODES = GLOBIO_NATHAB_CODES + [3, 4, 5]
+GLOBIO_AG_CODES = [2, 230, 231, 232]
 
 MICRONUTRIENT_LIST = ['Energy', 'VitA', 'Fe', 'Folate']
 
@@ -403,9 +400,9 @@ def main():
 
     for mask_hab_id, mask_list in [
             ('nathab', GLOBIO_NATHAB_CODES),
-            ('nathabgrass', GLOBIO_NATHABGRASS_CODES)]:
+            ('seminat', GLOBIO_SEMINAT_CODES)]:
         for globio_raster_key, globio_raster_path in GLOBIO_LU_MAPS.iteritems():
-            #Mask nathab/nathabgrass/ag
+            #Mask nathab/seminat/ag
             task_name = 'globio_%s_%s' % (mask_hab_id, globio_raster_key)
             globio_habmask_path = os.path.join(
                 TARGET_GLOBIO_WORKING_DIR, '%s.tif' % task_name)
@@ -436,8 +433,8 @@ def main():
                 target_path_list=[globio_hab_prop_path],
                 dependent_task_list=[globio_kernel_task, globio_mask_task],
                 task_name=globio_convolve_task_name)
-    #Convolve nathab/nathabgrass
-    #Mask convolution of nathab/nathabgrass w/ ag
+    #Convolve nathab/seminat
+    #Mask convolution of nathab/seminat w/ ag
 
     crop_table = pandas.read_csv(CROP_NUTRIENT_TABLE_PATH)
 
@@ -645,8 +642,8 @@ def main():
 
     nathabpath_id_map = {
         'nathab': os.path.join(WORKSPACE_DIR, 'nathab_proportion.tif'),
-        'nathabgrass': os.path.join(
-            WORKSPACE_DIR, 'nathabgrass_proportion.tif'),
+        'seminat': os.path.join(
+            WORKSPACE_DIR, 'seminat_proportion.tif'),
     }
 
     sumtask_id_map = {}
@@ -654,7 +651,7 @@ def main():
             (crop_path_list, ag_proportion_path, 'ag'),
             (habitat_path_list, nathabpath_id_map['nathab'], 'nathab'),
             (habitat_path_list+grass_path_list,
-             nathabpath_id_map['nathabgrass'], 'nathabgrass')]:
+             nathabpath_id_map['seminat'], 'seminat')]:
         sumtask_id_map[task_id] = task_graph.add_task(
             func=pygeoprocessing.raster_calculator,
             args=(
@@ -675,8 +672,8 @@ def main():
     hab_in_2km_path_id_map = {
         'nathab': os.path.join(
             WORKSPACE_DIR, 'nathab_proportion_within_2km.tif'),
-        'nathabgrass': os.path.join(
-            WORKSPACE_DIR, 'nathabgrass_proportion_within_2km.tif'),
+        'seminat': os.path.join(
+            WORKSPACE_DIR, 'seminat_proportion_within_2km.tif'),
         }
 
     # classify ag_proportion_path into a binary mask
@@ -698,8 +695,8 @@ def main():
     masked_hab_path_id_map = {
         'nathab': os.path.join(
             WORKSPACE_DIR, 'nathab_agmasked_proportion_within_2km.tif'),
-        'nathabgrass': os.path.join(
-            WORKSPACE_DIR, 'nathabgrass_agmasked_proportion_within_2km.tif'),
+        'seminat': os.path.join(
+            WORKSPACE_DIR, 'seminat_agmasked_proportion_within_2km.tif'),
     }
     for hab_id, hab_path in nathabpath_id_map.iteritems():
         # task_list[1] is the habitat classer task
@@ -709,7 +706,7 @@ def main():
                 (hab_path, 1), (kernel_path, 1),
                 hab_in_2km_path_id_map[hab_id]),
             kwargs={
-                'ignore_nodata': True,
+                'ignore_nodata': False,
                 'mask_nodata': True,
                 'normalize_kernel': True,
                 'target_datatype': gdal.GDT_Float32,
@@ -758,7 +755,7 @@ def main():
                 'aligned_%s_rasters' % str(micronutrient_key),
                 os.path.basename(x)) for x in [
                     nathabpath_id_map['nathab'],
-                    nathabpath_id_map['nathabgrass'],
+                    nathabpath_id_map['seminat'],
                     total_micronutrient_functional_yield_path,
                     pol_dep_micronutrient_functional_yield_path]]
 
@@ -768,7 +765,7 @@ def main():
             func=pygeoprocessing.align_and_resize_raster_stack,
             args=(
                 [nathabpath_id_map['nathab'],
-                 nathabpath_id_map['nathabgrass'],
+                 nathabpath_id_map['seminat'],
                  total_micronutrient_functional_yield_path,
                  pol_dep_micronutrient_functional_yield_path],
                 target_aligned_rasters,
@@ -783,7 +780,7 @@ def main():
             task_name='align_resize_raster_%s' % str(
                 micronutrient_key))
 
-        for hab_id, raster_index in [('nathab', 0), ('nathabgrass', 1)]:
+        for hab_id, raster_index in [('nathab', 0), ('seminat', 1)]:
             hab_risk_path = os.path.join(
                 WORKSPACE_DIR, '%s_risk_%s_yield.tif' % (
                     hab_id, micronutrient_key))

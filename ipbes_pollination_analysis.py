@@ -34,16 +34,21 @@ POSSIBLE_DROPBOX_LOCATIONS = [
     r'C:\Users\Rich\Dropbox',
     r'C:\Users\rpsharp\Dropbox',
     r'E:\Dropbox']
+
+LOGGER.info("checking dropbox locations")
 for path in POSSIBLE_DROPBOX_LOCATIONS:
+    print path
     if os.path.exists(path):
         BASE_DROPBOX_DIR = path
         break
+LOGGER.info("found %s", BASE_DROPBOX_DIR)
+
 LUH2_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'LUH2_1KM_ag_and_cover_as_geotiff')
 GLOBIO_BASE_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data',
     'GLOBIO4_landuse_10sec_tifs_20171207_Idiv')
-WORKSPACE_DIR = os.path.join(BASE_DROPBOX_DIR, 'ipbes_pollination_analysis')
+WORKSPACE_DIR = 'ipbes_pollination_analysis'
 BASE_CROP_DATA_DIR = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'Monfreda maps')
 BASE_CROP_RASTER_DIR = os.path.join(
@@ -58,13 +63,13 @@ GLOBIO_LU_MAPS = {
         'Globio4_landuse_10sec_2015_cropint.tif'),
     '2050_ssp1_rcp26': os.path.join(
         GLOBIO_BASE_DATA_DIR, 'SSP1_RCP26',
-        'Globio4_landuse_10sec_2050_cropint.tif')
-    '2050_ssp3_rcp70': : os.path.join(
+        'Globio4_landuse_10sec_2050_cropint.tif'),
+    '2050_ssp3_rcp70': os.path.join(
         GLOBIO_BASE_DATA_DIR, 'SSP3_RCP70',
-        'Globio4_landuse_10sec_2050_cropint.tif')
+        'Globio4_landuse_10sec_2050_cropint.tif'),
     '2050_ssp5_rcp85': os.path.join(
         GLOBIO_BASE_DATA_DIR, 'SSP5_RCP85',
-        'Globio4_landuse_10sec_2050_cropint.tif')
+        'Globio4_landuse_10sec_2050_cropint.tif'),
 }
 
 GLOBIO_NATHAB_CODES = [6] + range(50, 181)
@@ -820,6 +825,13 @@ def main():
     task_graph.close()
     task_graph.join()
 
+    with open(os.path.join(WORKSPACE_DIR, 'README.txt'), 'a') as readme_file:
+        readme_file.write("complete on %s" % datetime.datetime.now())
+
+    target_dir = os.path.join(BASE_DROPBOX_DIR, WORKSPACE_DIR)
+    if os.path.exists(target_dir):
+        shutils.rmtree(target_dir)
+        shutils.copytree(WORKSPACE_DIR, target_dir)
 
 if __name__ == '__main__':
     main()

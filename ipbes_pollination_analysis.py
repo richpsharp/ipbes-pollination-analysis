@@ -579,7 +579,7 @@ def main():
                     pol_dep_id, micronutrient_id))
 
             micronutrient_crop_sum_task = task_graph.add_task(
-                func=add_arrays_passthrough_nodata,
+                func=pygeoprocessing.raster_calculator,
                 args=(
                     micronutrient_crop_path_list,
                     add_arrays_passthrough_nodata,
@@ -764,7 +764,7 @@ if __name__ == '__main__':
             readme_file.write(
                 "something crashed! on %s\n" % datetime.datetime.now())
             readme_file.write(
-                "here's the error: %s\n" % traceback.format_exec())
+                "here's the error: %s\n" % traceback.format_exc())
             readme_file.write(
                 "program is ending now you won't see anything else until "
                 "it restarts\n")

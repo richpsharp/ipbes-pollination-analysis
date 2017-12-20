@@ -663,7 +663,8 @@ def main():
                     args=(
                         [(globio_ag_mask_path, 1),
                          (warp_micronutrient_path, 1)], mult_arrays,
-                        target_total_micronutrient_yield_path, NODATA,),
+                        target_total_micronutrient_yield_path,
+                        gdal.GDT_Float32, NODATA,),
                     target_path_list=[target_total_micronutrient_yield_path],
                     dependent_task_list=[
                         globio_ag_mask_task, warp_micronutrient_task],
@@ -677,10 +678,8 @@ def main():
     # Primary output of analysis 'total_%s_%s_stable_yield_pointthree_%s
     for mask_hab_id in ['nathab', 'seminat']:
         for globio_raster_key in GLOBIO_LU_MAPS:
-            globio_ag_mask_path, globio_ag_mask_task = (
-                globio_ag_mask_path_task_map[globio_raster_key])
-            hab_area_path, hab_area_task = habitat_area_path_task_map[
-                (mask_hab_id, globio_raster_key)]
+            globio_hab_prop_path, habitat_proportion_task = (
+                habitat_area_path_task_map[(mask_hab_id, globio_raster_key)])
             for micronutrient_id in MICRONUTRIENT_LIST:
                 total_yield_path, total_yield_task = (
                     total_micronutrient_path_task_map[(
@@ -698,13 +697,13 @@ def main():
                     func=pygeoprocessing.raster_calculator,
                     args=(
                         [(total_yield_path, 1), (pol_dep_total_yield_path, 1),
-                         (globio_ag_mask_path, 1)],
+                         (globio_hab_prop_path, 1)],
                         subtract_when_less_than_threshold_mask_op,
                         target_total_stable_yield_path, gdal.GDT_Float32,
                         NODATA),
                     target_path_list=[target_total_stable_yield_path],
                     dependent_task_list=[
-                        globio_ag_mask_task, pol_dep_total_yield_task,
+                        habitat_proportion_task, pol_dep_total_yield_task,
                         total_yield_task],
                     task_name='total_%s_%s_stable_yield_pointthree_%s' % (
                         globio_raster_key, mask_hab_id, micronutrient_id))
@@ -718,13 +717,13 @@ def main():
                     func=pygeoprocessing.raster_calculator,
                     args=(
                         [(pol_dep_total_yield_path, 1),
-                         (globio_ag_mask_path, 1)],
+                         (globio_hab_prop_path, 1)],
                         mask_geq_threshold_mask_op,
                         target_total_pol_dep_yield_loss_path,
                         gdal.GDT_Float32, NODATA),
                     target_path_list=[target_total_pol_dep_yield_loss_path],
                     dependent_task_list=[
-                        globio_ag_mask_task, pol_dep_total_yield_task],
+                        habitat_proportion_task, pol_dep_total_yield_task],
                     task_name=(
                         'total_%s_%s_pol_dep_yield_loss_pointthree_%s' % (
                             globio_raster_key, mask_hab_id,

@@ -4,6 +4,7 @@ This is "3b" from https://docs.google.com/document/d/1k5yyhisemNrjG7ZSFGfD7GbIGY
 Multiply by annual nutrient demand by age group and add up to get total demand
 per grid cell for en, fe, fo, va at a degree scale raster.
 """
+import re
 import pickle
 import logging
 import glob
@@ -61,6 +62,56 @@ def zonal_stats_to_pickle(
         pickle.dump(result, pickle_file)
 
 
+def create_nutrient_demand_raster(
+        nutrient, dietary_table, pickle_path_list, target_raster_path):
+    """Add pickled degree stats and mult by nut to raster.
+
+    Parameters:
+        nutrient (string): nutrient to calculate
+        dietary_table (pandas.DataFrame): dietary table with 'age' and
+            `nutrient` headers.
+        pickle_path_list (list): list of pickled zonal stats dictionaries of
+            the form 'scenario_ageid'
+        target_raster_path(string): path to target raster"""
+    nodata = 0
+    base_array = numpy.empty((180, 360), dtype=numpy.float32)
+    base_array[:] = nodata
+    wgs84_sr = osr.SpatialReference()
+    wgs84_sr.ImportFromEPSG(4326)
+    driver = gdal.GetDriverByName('GTiff')
+    print 'create raster'
+    summary_raster = driver.Create(
+        target_raster_path, 360, 180, 1, gdal.GDT_Float32)
+    summary_raster.SetProjection(wgs84_sr.ExportToWkt())
+    wgs84_gt = [-180., 1., 0, 90., 0., -1.]
+    summary_raster.SetGeoTransform(wgs84_gt)
+    summary_band = summary_raster.GetRasterBand(1)
+    summary_band.SetNoDataValue(nodata)
+    summary_band.Fill(nodata)
+    inv_gt = gdal.InvGeoTransform(wgs84_gt)
+    for pickle_path in pickle_path_list:
+        age_id = re.match('.*_(.*)', pickle_path).group(1)
+
+        nutrient_demand = dietary_table.loc[
+            dietary_table['age'] == age_id][nutrient]
+
+        with open(pickle_path, 'r') as pickle_file:
+            grid_stats = pickle.load(pickle_file)
+
+        for grid_id in grid_stats:
+            grid_x = (grid_id - 1) % 360
+            grid_y = (grid_id - 1) // 360
+            i_x = int(inv_gt[0] + grid_x * inv_gt[1])
+            i_y = int(inv_gt[3] + grid_y * inv_gt[5])
+
+            # value = sum(table[nut, age] * count_age, for all ages)
+            value = grid_stats[grid_id]['sum'] * nutrient_demand
+            base_array[i_y, i_x] += value
+
+    summary_band.WriteArray(base_array)
+
+
+
 def main():
     """Entry point."""
     try:
@@ -76,6 +127,8 @@ def main():
         BASE_DROPBOX_DIR, 'ipbes stuff',
         'ipbes_pollination_1_27_2018', 'gwpop', '*.tif'))
 
+    dietary_table = pandas.read_csv(DIETARY_REQUIREMENTS_TABLE_PATH)
+
     pickle_task_list = []
     for raster_path in raster_path_list:
         pickle_path = os.path.join(
@@ -86,42 +139,22 @@ def main():
             target_path_list=[pickle_path])
         pickle_task_list.append((pickle_path, pickle_task))
 
-    dietary_table = pandas.read_csv(DIETARY_REQUIREMENTS_TABLE_PATH)
+    for scenario in ['cur', 'ssp1', 'ssp3', 'ssp5']:
+        for nutrient in  ['en', 'fe', 'fo', 'va']:
+            print 'create 1 degree raster %s %s' % (scenario, nutrient)
 
-    for pickle_path, zonal_task in pickle_task_list:
-        print 'create 1 degree raster from pickle path and multiply it by nut requirements'
-        raster_path = os.path.join(
-            WORKSPACE_DIR, '%s.tif' % os.path.basename(pickle_path))
+            scenario_task_list = [
+                x for x in pickle_task_list if scenario in x[0]]
+            td_raster_path = os.path.join(
+                WORKSPACE_DIR, 'td_%s_%s.tif' % (nutrient, scenario))
 
-        with open(pickle_path, 'r') as pickle_file:
-            grid_stats = pickle.load(pickle_file)
-
-        wgs84_sr = osr.SpatialReference()
-        wgs84_sr.ImportFromEPSG(4326)
-        driver = gdal.GetDriverByName('GTiff')
-        print 'create raster'
-        summary_raster = driver.Create(
-            raster_path, 360, 180, 1, gdal.GDT_Float32)
-        summary_raster.SetProjection(wgs84_sr.ExportToWkt())
-        wgs84_gt = [-180.0, 1.0, 0, 90., 0, -1]
-        summary_raster.SetGeoTransform(wgs84_gt)
-        summary_band = summary_raster.GetRasterBand(1)
-        nodata = -1
-        summary_band.SetNoDataValue(nodata)
-        summary_band.Fill(nodata)
-        base_array = numpy.empty((180, 360), dtype=numpy.float32)
-        base_array[:] = nodata
-        inv_gt = gdal.InvGeoTransform(wgs84_gt)
-
-        for grid_id in grid_stats:
-            grid_x = (grid_id - 1) % 360
-            grid_y = (grid_id - 1) // 360
-            i_x = int(inv_gt[0] + grid_x * inv_gt[1])
-            i_y = int(inv_gt[3] + grid_y * inv_gt[5])
-            value = grid_stats[grid_id]['sum']
-            summary_band.WriteArray(numpy.array([[value]]), i_x, i_y)
-
-
+            task_graph.add_task(
+                func=create_nutrient_demand_raster,
+                args=(
+                    nutrient, dietary_table, [x[0] for x in scenario_task_list],
+                    td_raster_path),
+                target_path_list=[td_raster_path],
+                dependent_task_list=[x[1] for x in scenario_task_list])
 
     #[cur | ssp[1 | 3 | 5]]_gpwpop_[014 | 1564 | 65p][f | m] * table[en | fe | fo | va ; 0-14 F | 0 -14 M |15-64 F  | 15-64 M | 65+ F | 65+ M]
 

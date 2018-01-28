@@ -41,7 +41,7 @@ DIETARY_REQUIREMENTS_TABLE_PATH = os.path.join(
     BASE_DROPBOX_DIR, 'ipbes-data', 'Dietary requirements RNI EAR_annual.csv')
 
 DEGREE_GRID_PATH = os.path.join(
-    BASE_DROPBOX_DIR, 'rps_bck_shared_stuff', 'ipbes stuff',
+    BASE_DROPBOX_DIR, 'ipbes stuff',
     'summary table shapefile', 'degree_basedata', 'grid_1_degree.shp')
 
 WORKSPACE_DIR = 'ipbes_dietary_workspace'
@@ -70,7 +70,7 @@ def main():
         reporting_interval=REPORTING_INTERVAL, dry_run=DRY_RUN)
 
     raster_path_list = glob.glob(os.path.join(
-        BASE_DROPBOX_DIR, 'rps_bck_shared_stuff', 'ipbes stuff',
+        BASE_DROPBOX_DIR, 'ipbes stuff',
         'ipbes_pollination_1_27_2018', 'gwpop', '*.tif'))
 
     pickle_task_list = []
@@ -87,6 +87,8 @@ def main():
 
     for pickle_path, zonal_task in pickle_task_list:
         print 'create 1 degree raster from pickle path and multiply it by nut requirements'
+        raster_path = os.path.join(
+            WORKSPACE_DIR, )
 
     #[cur | ssp[1 | 3 | 5]]_gpwpop_[014 | 1564 | 65p][f | m] * table[en | fe | fo | va ; 0-14 F | 0 -14 M |15-64 F  | 15-64 M | 65+ F | 65+ M]
 

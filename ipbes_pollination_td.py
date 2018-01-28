@@ -9,6 +9,9 @@ import logging
 import glob
 import os
 
+import numpy
+from osgeo import gdal
+from osgeo import osr
 import taskgraph
 import pandas
 import pygeoprocessing
@@ -88,7 +91,37 @@ def main():
     for pickle_path, zonal_task in pickle_task_list:
         print 'create 1 degree raster from pickle path and multiply it by nut requirements'
         raster_path = os.path.join(
-            WORKSPACE_DIR, )
+            WORKSPACE_DIR, '%s.tif' % os.path.basename(pickle_path))
+
+        with open(pickle_path, 'r') as pickle_file:
+            grid_stats = pickle.load(pickle_file)
+
+        wgs84_sr = osr.SpatialReference()
+        wgs84_sr.ImportFromEPSG(4326)
+        driver = gdal.GetDriverByName('GTiff')
+        print 'create raster'
+        summary_raster = driver.Create(
+            raster_path, 360, 180, 1, gdal.GDT_Float32)
+        summary_raster.SetProjection(wgs84_sr.ExportToWkt())
+        wgs84_gt = [-180.0, 1.0, 0, 90., 0, -1]
+        summary_raster.SetGeoTransform(wgs84_gt)
+        summary_band = summary_raster.GetRasterBand(1)
+        nodata = -1
+        summary_band.SetNoDataValue(nodata)
+        summary_band.Fill(nodata)
+        base_array = numpy.empty((180, 360), dtype=numpy.float32)
+        base_array[:] = nodata
+        inv_gt = gdal.InvGeoTransform(wgs84_gt)
+
+        for grid_id in grid_stats:
+            grid_x = (grid_id - 1) % 360
+            grid_y = (grid_id - 1) // 360
+            i_x = int(inv_gt[0] + grid_x * inv_gt[1])
+            i_y = int(inv_gt[3] + grid_y * inv_gt[5])
+            value = grid_stats[grid_id]['sum']
+            summary_band.WriteArray(numpy.array([[value]]), i_x, i_y)
+
+
 
     #[cur | ssp[1 | 3 | 5]]_gpwpop_[014 | 1564 | 65p][f | m] * table[en | fe | fo | va ; 0-14 F | 0 -14 M |15-64 F  | 15-64 M | 65+ F | 65+ M]
 

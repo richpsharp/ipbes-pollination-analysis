@@ -88,7 +88,6 @@ def create_nutrient_demand_raster(
     summary_band = summary_raster.GetRasterBand(1)
     summary_band.SetNoDataValue(nodata)
     summary_band.Fill(nodata)
-    inv_gt = gdal.InvGeoTransform(wgs84_gt)
     for pickle_path in pickle_path_list:
         age_id = re.match('.*_(.*)', pickle_path).group(1)
 
@@ -101,12 +100,10 @@ def create_nutrient_demand_raster(
         for grid_id in grid_stats:
             grid_x = (grid_id - 1) % 360
             grid_y = (grid_id - 1) // 360
-            i_x = int(inv_gt[0] + grid_x * inv_gt[1])
-            i_y = int(inv_gt[3] + grid_y * inv_gt[5])
 
             # value = sum(table[nut, age] * count_age, for all ages)
             value = grid_stats[grid_id]['sum'] * nutrient_demand
-            base_array[i_y, i_x] += value
+            base_array[grid_y, grid_x] += value
 
     summary_band.WriteArray(base_array)
 

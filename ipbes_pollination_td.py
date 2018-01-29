@@ -91,8 +91,10 @@ def create_nutrient_demand_raster(
     for pickle_path in pickle_path_list:
         age_id = re.match('.*_(.*)', pickle_path).group(1)
 
-        nutrient_demand = dietary_table.loc[
+        nutrient_demand_raw = dietary_table.loc[
             dietary_table['age'] == age_id][nutrient]
+        print age_id, nutrient, nutrient_demand_raw
+        nutrient_demand = float(nutrient_demand_raw)
 
         with open(pickle_path, 'r') as pickle_file:
             grid_stats = pickle.load(pickle_file)
@@ -106,7 +108,6 @@ def create_nutrient_demand_raster(
             base_array[grid_y, grid_x] += value
 
     summary_band.WriteArray(base_array)
-
 
 
 def main():
@@ -141,7 +142,10 @@ def main():
             print 'create 1 degree raster %s %s' % (scenario, nutrient)
 
             scenario_task_list = [
-                x for x in pickle_task_list if scenario in x[0]]
+                x for x in pickle_task_list
+                if scenario in x[0] and
+                'rural' not in x[0] and
+                'total' not in x[0]]
             td_raster_path = os.path.join(
                 WORKSPACE_DIR, 'td_%s_%s.tif' % (nutrient, scenario))
 

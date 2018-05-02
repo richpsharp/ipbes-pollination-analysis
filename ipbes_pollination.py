@@ -5,9 +5,13 @@ Pollination analysis for IPBES.
 """
 import pandas
 
+import reproduce
+
+WORKING_DIR = '.'
 
 def main():
     """Entry point."""
+    reproduce_env = reproduce.Reproduce(WORKING_DIR)
 
     # The following table is used for:
     #  Crop pollination dependency was determined for 115 crops. Dependency
@@ -22,8 +26,16 @@ def main():
     #   content, and summed across all crops to derive pollination-dependent
     #   nutrient yields (KJ/ha, IU Vitamin A/ha, mcg Folate/ha) for each
     #   nutrient at 5 arc min. The full table used in this analysis can be
-    # found at (permanent link to table).
-    crop_nutrient_df = pandas.read_csv('./pollination_data/crop_nutrient.csv')
+    # found at https://storage.googleapis.com/ecoshard-root/'
+    # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
+    reproduce_env.register_data(
+        'crop_nutrient_table',
+        'pollination_data/crop_nutrient.csv',
+        reproduce.url_fetcher(
+            'https://storage.googleapis.com/ecoshard-root/'
+            'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv'))
+
+    crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
     print crop_nutrient_df
 
     # TODO: put in a link to the data crop files here (section 1.2):

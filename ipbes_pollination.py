@@ -3,19 +3,25 @@ Pollination analysis for IPBES.
 
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
 """
+from osgeo import gdal
+from osgeo import osr
 import pandas
-import reproduce
 import numpy
 import scipy.ndimage.morphology
+import reproduce
+import taskgraph
 
 
 WORKING_DIR = '.'
 NODATA = -9999
+N_WORKERS = -1
 
 
 def main():
     """Entry point."""
     reproduce_env = reproduce.Reproduce(WORKING_DIR)
+    task_graph = taskgraph.TaskGraph(
+        reproduce_env['CACHE_DIR'], N_WORKERS)
 
     # The following table is used for:
     #  Crop pollination dependency was determined for 115 crops. Dependency
@@ -32,9 +38,10 @@ def main():
     #   nutrient at 5 arc min. The full table used in this analysis can be
     # found at https://storage.googleapis.com/ecoshard-root/'
     # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
-    reproduce_env.register_data(
-        'crop_nutrient_table',
-        'pollination_data/crop_nutrient.csv')
+    task_graph.add_task(
+        func=reproduce_env.register_data, args=(
+            'crop_nutrient_table',
+            'pollination_data/crop_nutrient.csv'))
 
     # The following table is used for:
     # Pollinator habitat was defined as any natural land covers, as defined
@@ -45,14 +52,11 @@ def main():
     #  addition to "natural", and repeated all analyses with semi-natural
     #  plus natural habitats, but this did not substantially alter the results
     #  so we do not include it in our final analysis or code base.
-    reproduce_env.register_data(
-        'globio_class_table',
-        'pollination_data/GLOBIOluclass.csv')
+    task_graph.add_task(
+        func=reproduce_env.register_data, args=(
+            'globio_class_table',
+            'pollination_data/GLOBIOluclass.csv'))
 
-    crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
-    globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
-    print crop_nutrient_df
-    print globio_df
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
@@ -60,6 +64,20 @@ def main():
     #  the distance most commonly found to be predictive of pollination
     #  services (Kennedy et al. 2013).
     # TODO: calculate proportional area of natural within 2km
+    task_graph.add_task(
+        func=reproduce_env.register_data,
+        args=(
+            'convolution_kernel_raster',
+            'convolution_kernel.tif',
+            lambda kernel_filepath: create_radial_convolution_mask(
+                0.00277778, 2000., kernel_filepath)))
+
+    task_graph.join()
+    crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
+    globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
+    print crop_nutrient_df
+    print globio_df
+    """
     pygeoprocessing.convolve_2d(
         signal_path_band, kernel_path_band, target_path,
         ignore_nodata=False, mask_nodata=True, normalize_kernel=False,
@@ -67,16 +85,17 @@ def main():
         target_nodata=None,
         gtiff_creation_options=_DEFAULT_GTIFF_CREATION_OPTIONS,
         working_dir=None)
+    """
 
     #  1.1.4.  Sufficiency threshold
     #  A threshold of 0.3 was set to evaluate whether there was sufficient
     #   pollinator habitat in the 2 km around farmland to provide pollination
-    #   services, based on Kremen et al.’s (2005)  estimate of the area
+    #   services, based on Kremen et al.'s (2005)  estimate of the area
     #   requirements for achieving full pollination. This produced a map of
     #   wild pollination sufficiency where every agricultural pixel was
     #   designated in a binary fashion: 0 if proportional area of habitat was
     #   less than 0.3; 1 if greater than 0.3. Maps of pollination sufficiency
-    #   can be found at (permanent link to output), outputs “poll_suff_...”
+    #   can be found at (permanent link to output), outputs "poll_suff_..."
     #   below.
     # TODO: threshold
 
@@ -99,7 +118,7 @@ def create_radial_convolution_mask(
     pixel_size_m = pixel_size_degree * (degree_len_0 + degree_len_60) / 2.0
     pixel_radius = numpy.ceil(radius_meters / pixel_size_m)
     n_pixels = (int(pixel_radius) * 2 + 1)
-    sample_pixels = 300
+    sample_pixels = 200
     mask = numpy.ones((sample_pixels * n_pixels, sample_pixels * n_pixels))
     mask[mask.shape[0]/2, mask.shape[0]/2] = 0
     distance_transform = scipy.ndimage.morphology.distance_transform_edt(mask)
@@ -115,49 +134,22 @@ def create_radial_convolution_mask(
     reshaped = None
 
     driver = gdal.GetDriverByName('GTiff')
-    kernel_dataset = driver.Create(
-        kernel_filepath.encode('utf-8'), kernel_size, kernel_size, 1,
+    kernel_raster = driver.Create(
+        kernel_filepath.encode('utf-8'), n_pixels, n_pixels, 1,
         gdal.GDT_Float32, options=[
             'BIGTIFF=IF_SAFER', 'TILED=YES', 'BLOCKXSIZE=256',
             'BLOCKYSIZE=256'])
 
     # Make some kind of geotransform, it doesn't matter what but
     # will make GIS libraries behave better if it's all defined
-    kernel_dataset.SetGeoTransform([444720, 30, 0, 3751320, 0, -30])
+    kernel_raster.SetGeoTransform([-180, 1, 0, 90, 0, -1])
     srs = osr.SpatialReference()
-    srs.SetUTM(11, 1)
-    srs.SetWellKnownGeogCS('NAD27')
-    kernel_dataset.SetProjection(srs.ExportToWkt())
-
-    kernel_band = kernel_dataset.GetRasterBand(1)
+    srs.ImportFromEPSG(4326)
+    kernel_raster.SetProjection(srs.ExportToWkt())
+    kernel_band = kernel_raster.GetRasterBand(1)
     kernel_band.SetNoDataValue(NODATA)
     kernel_band.WriteArray(kernel_array)
 
-
-def step_kernel(n_pixels, kernel_filepath):
-    """Create a box circle kernel of 1+2*n_pixels."""
-    kernel_size = 1+2*n_pixels
-    driver = gdal.GetDriverByName('GTiff')
-    kernel_dataset = driver.Create(
-        kernel_filepath.encode('utf-8'), kernel_size, kernel_size, 1,
-        gdal.GDT_Float32, options=[
-            'BIGTIFF=IF_SAFER', 'TILED=YES', 'BLOCKXSIZE=256',
-            'BLOCKYSIZE=256'])
-
-    # Make some kind of geotransform, it doesn't matter what but
-    # will make GIS libraries behave better if it's all defined
-    kernel_dataset.SetGeoTransform([444720, 30, 0, 3751320, 0, -30])
-    srs = osr.SpatialReference()
-    srs.SetUTM(11, 1)
-    srs.SetWellKnownGeogCS('NAD27')
-    kernel_dataset.SetProjection(srs.ExportToWkt())
-
-    kernel_band = kernel_dataset.GetRasterBand(1)
-    kernel_band.SetNoDataValue(NODATA)
-    mask_array = numpy.ones((kernel_size, kernel_size))
-    mask_array[n_pixels, n_pixels] = 0
-    dist_array = scipy.ndimage.morphology.distance_transform_edt(mask_array)
-    kernel_band.WriteArray(dist_array < n_pixels)
 
 if __name__ == '__main__':
     main()

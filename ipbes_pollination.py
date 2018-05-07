@@ -3,6 +3,13 @@ Pollination analysis for IPBES.
 
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
 """
+import re
+import logging
+import functools
+
+import pygeoprocessing
+import google.cloud.client
+import google.cloud.storage
 from osgeo import gdal
 from osgeo import osr
 import pandas
@@ -11,8 +18,20 @@ import scipy.ndimage.morphology
 import reproduce
 import taskgraph
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format=(
+        '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
+        ' [%(pathname)s.%(funcName)s:%(lineno)d] %(message)s'))
+LOGGER = logging.getLogger('ipbes_pollination')
+
+# the following are the globio landcover codes. A tuple (x, y) indicates the
+# inclusive range from x to y.
+GLOBIO_AG_CODES = [2, (230, 232)]
+GLOBIO_NATURAL_CODES = [6, (50, 180)]
 
 WORKING_DIR = '.'
+GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
 N_WORKERS = -1
 
@@ -38,10 +57,14 @@ def main():
     #   nutrient at 5 arc min. The full table used in this analysis can be
     # found at https://storage.googleapis.com/ecoshard-root/'
     # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
-    task_graph.add_task(
-        func=reproduce_env.register_data, args=(
-            'crop_nutrient_table',
-            'pollination_data/crop_nutrient.csv'))
+    reproduce_env.register_data(
+        'crop_nutrient_table',
+        'pollination_data/crop_nutrient.csv',
+        expected_hash=('md5', '2fbe7455357f8008a12827fd88816fc1'),
+        constructor_func=google_bucket_fetcher(
+            'https://storage.googleapis.com/ecoshard-root/'
+            'crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
+            GOOGLE_BUCKET_KEY_PATH))
 
     # The following table is used for:
     # Pollinator habitat was defined as any natural land covers, as defined
@@ -52,31 +75,78 @@ def main():
     #  addition to "natural", and repeated all analyses with semi-natural
     #  plus natural habitats, but this did not substantially alter the results
     #  so we do not include it in our final analysis or code base.
-    task_graph.add_task(
-        func=reproduce_env.register_data, args=(
-            'globio_class_table',
-            'pollination_data/GLOBIOluclass.csv'))
-
+    reproduce_env.register_data(
+        'globio_class_table',
+        'pollination_data/GLOBIOluclass.csv',
+        expected_hash=('md5', '4506b5c87fe70f7fba63eb4ee5b1e2d0'),
+        constructor_func=google_bucket_fetcher(
+            'https://storage.cloud.google.com/ecoshard-root/'
+            'GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv',
+            GOOGLE_BUCKET_KEY_PATH))
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
     #  232) at 10 arc seconds (~300 m) resolution. This 2 km scale represents
     #  the distance most commonly found to be predictive of pollination
     #  services (Kennedy et al. 2013).
-    # TODO: calculate proportional area of natural within 2km
-    task_graph.add_task(
-        func=reproduce_env.register_data,
-        args=(
-            'convolution_kernel_raster',
-            'convolution_kernel.tif',
+    reproduce_env.register_data(
+        'kernel_raster',
+        'kernel_raster.tif',
+        constructor_func=(
             lambda kernel_filepath: create_radial_convolution_mask(
                 0.00277778, 2000., kernel_filepath)))
 
-    task_graph.join()
     crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
     globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
-    print crop_nutrient_df
-    print globio_df
+
+    landcover_data = {
+        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP5_RCP85_md5_1b3cc1ce6d0ff14d66da676ef194f130.tif",
+            ('md5', '1b3cc1ce6d0ff14d66da676ef194f130')),
+        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_803166420f51e5ef7dcaa970faa98173.tif",
+            ('md5', '803166420f51e5ef7dcaa970faa98173')),
+        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_e77077a3220a36f7f0441bbd0f7f14ab.tif",
+            ('md5', 'e77077a3220a36f7f0441bbd0f7f14ab')),
+        'Globio4_landuse_10sec_1850': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1850_md5_0b7fcb4b180d46b4fc2245beee76d6b9.tif",
+            ('md5', '0b7fcb4b180d46b4fc2245beee76d6b9')),
+        'Globio4_landuse_10sec_2015': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_2015_md5_939a57c2437cd09bd5a9eb472b9bd781.tif",
+            ('md5', '939a57c2437cd09bd5a9eb472b9bd781')),
+        'Globio4_landuse_10sec_1980': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1980_md5_f6384eac7579318524439df9530ca1f4.tif",
+            ('md5', 'f6384eac7579318524439df9530ca1f4')),
+        'Globio4_landuse_10sec_1945': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1945_md5_52c7b4c38c26defefa61132fd25c5584.tif",
+            ('md5', '52c7b4c38c26defefa61132fd25c5584')),
+        'Globio4_landuse_10sec_1910': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1910_md5_e7da8fa29db305ff63c99fed7ca8d5e2.tif",
+            ('md5', 'e7da8fa29db305ff63c99fed7ca8d5e2')),
+        'Globio4_landuse_10sec_1900': (
+            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1900_md5_f5db818a5b16799bf2cb627e574120a4.tif",
+            ('md5', 'f5db818a5b16799bf2cb627e574120a4')),
+        }
+
+    for landcover_key, (landcover_url, expected_hash) in landcover_data.iteritems():
+        reproduce_env.register_data(
+            landcover_key,
+            'landcover/%s.tif' % landcover_key,
+            expected_hash=expected_hash,
+            constructor_func=google_bucket_fetcher(
+                landcover_url, GOOGLE_BUCKET_KEY_PATH))
+        ag_mask_key = '%s_ag_mask' % landcover_key
+        local_ag_path = 'ag_mask/%s.tif' % ag_mask_key
+        ag_target_path = reproduce_env.predict_path(local_ag_path)
+        reproduce_env.register_data(
+            ag_mask_key,
+            local_ag_path,
+            constructor_func=functools.partial(
+                mask_raster, reproduce_env[landcover_key], GLOBIO_AG_CODES))
+
+    # next need to mask landcover into 'agriculture' and 'native'
+
     """
     pygeoprocessing.convolve_2d(
         signal_path_band, kernel_path_band, target_path,
@@ -150,6 +220,69 @@ def create_radial_convolution_mask(
     kernel_band.SetNoDataValue(NODATA)
     kernel_band.WriteArray(kernel_array)
 
+
+def google_bucket_fetcher(url, json_key_path):
+    """Create a function to download a Google Blob to a given path.
+
+    Parameters:
+        url (string): url to blob, matches the form
+            '^https://storage.cloud.google.com/([^/]*)/(.*)$'
+        json_key_path (string): path to Google Cloud private key generated
+            by https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+
+    Returns:
+        a function with a single `path` argument to the target file. Invoking
+            this function will download the Blob to `path`.
+
+    """
+    def _google_bucket_fetcher(path):
+        """Fetch blob `url` to `path`."""
+        url_matcher = re.match(
+            '^https://[^/]*\.com/([^/]*)/(.*)$', url)
+        LOGGER.debug(url)
+        client = google.cloud.storage.client.Client.from_service_account_json(
+            json_key_path)
+        bucket_id = url_matcher.group(1)
+        LOGGER.debug('parsing bucket %s from %s', bucket_id, url)
+        bucket = client.get_bucket(bucket_id)
+        blob_id = url_matcher.group(2)
+        LOGGER.debug('loading blob %s from %s', blob_id, url)
+        blob = google.cloud.storage.Blob(blob_id, bucket)
+        LOGGER.info('downloading blob %s from %s' % (path, url))
+        blob.download_to_filename(path)
+    return _google_bucket_fetcher
+
+
+def mask_raster(base_path, codes, target_path):
+    """Mask `base_path` to 1 where values are in codes. 0 otherwise.
+
+    Parameters:
+        base_path (string): path to single band integer raster.
+        codes (list): list of integer or tuple integer pairs. Membership in
+            `codes` or within the inclusive range of a tuple in `codes`
+            is sufficient to mask the corresponding raster integer value
+            in `base_path` to 1 for `target_path`.
+        target_path (string): path to desired mask raster. Any corresponding
+            pixels in `base_path` that also match a value or range in
+            `codes` will be masked to 1 in `target_path`. All other values
+            are 0.
+
+    Returns:
+        None.
+
+    """
+    code_list = [
+        item for sublist in [
+            range(x[0], x[1]+1) if isinstance(x, tuple) else [x]
+            for x in codes] for item in sublist]
+    code_array = numpy.array(code_list)
+    LOGGER.debug('expanded code array %s', code_array)
+
+    def mask_codes(base_array):
+        return numpy.isin(base_array, code_array)
+
+    pygeoprocessing.raster_calculator(
+        [(base_path, 1)], mask_codes, target_path, gdal.GDT_Byte, 2)
 
 if __name__ == '__main__':
     main()

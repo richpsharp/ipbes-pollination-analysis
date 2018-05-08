@@ -7,6 +7,7 @@ import re
 import logging
 import functools
 
+import pathos.helpers
 import pygeoprocessing
 import google.cloud.client
 import google.cloud.storage
@@ -253,6 +254,13 @@ def google_bucket_fetcher(url, json_key_path):
     return _google_bucket_fetcher
 
 
+class MaskCodes(object):
+    def __init__(self, code_array):
+        self.code_array = code_array
+
+    def __call__(self, base_array):
+        return numpy.isin(base_array, self.code_array)
+
 def mask_raster(base_path, codes, target_path):
     """Mask `base_path` to 1 where values are in codes. 0 otherwise.
 
@@ -278,11 +286,9 @@ def mask_raster(base_path, codes, target_path):
     code_array = numpy.array(code_list)
     LOGGER.debug('expanded code array %s', code_array)
 
-    def mask_codes(base_array):
-        return numpy.isin(base_array, code_array)
-
     pygeoprocessing.raster_calculator(
-        [(base_path, 1)], mask_codes, target_path, gdal.GDT_Byte, 2)
+        [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2)
 
 if __name__ == '__main__':
+    pathos.multiprocessing.freeze_support()
     main()

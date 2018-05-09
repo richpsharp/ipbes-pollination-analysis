@@ -7,7 +7,6 @@ import re
 import logging
 import functools
 
-import pathos.helpers
 import pygeoprocessing
 import google.cloud.client
 import google.cloud.storage
@@ -290,5 +289,4 @@ def mask_raster(base_path, codes, target_path):
         [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2)
 
 if __name__ == '__main__':
-    pathos.multiprocessing.freeze_support()
     main()

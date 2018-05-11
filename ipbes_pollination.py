@@ -133,31 +133,39 @@ def main():
     for landcover_key, (landcover_url, expected_hash) in landcover_data.iteritems():
         landcover_local_path = 'landcover/%s.tif' % landcover_key
         landcover_fetch_task = task_graph.add_task(
-            func=functools.partial(
-                reproduce_env.register_data, landcover_key,
-                landcover_local_path,  **{
-                    'expected_hash': expected_hash,
-                    'constructor_func': functools.partial(
-                        google_bucket_fetcher,
-                        landcover_url, GOOGLE_BUCKET_KEY_PATH)}))
-
-        ag_mask_key = '%s_ag_mask' % landcover_key
-        local_ag_path = 'ag_mask/%s.tif' % ag_mask_key
-        ag_target_path = reproduce_env.predict_path(local_ag_path)
-
-        mask_task = task_graph.add_task(
-            func=mask_raster,
+            func=register_data,
             args=(
+                reproduce_env,
+                landcover_key,
+                landcover_local_path,
+                expected_hash,
                 functools.partial(
-                    reproduce_env.predict_path, landcover_local_path),
-                GLOBIO_AG_CODES, ag_target_path),
-            target_path_list=[ag_target_path],
-            dependent_task_list=[landcover_fetch_task])
+                    google_bucket_fetcher,
+                    landcover_url, GOOGLE_BUCKET_KEY_PATH)))
 
-        task_graph.add_task(
-            func=functools.partial(
-                reproduce_env.register_data, ag_mask_key, local_ag_path),
-            dependent_task_list=[mask_task])
+        for mask_prefix, globio_codes in [
+                ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
+            mask_key = '%s_%s_mask' % (landcover_key, mask_prefix)
+            local_mask_path = '%s_mask/%s.tif' % (mask_prefix, mask_key)
+            mask_target_path = reproduce_env.predict_path(local_mask_path)
+
+            mask_task = task_graph.add_task(
+                func=mask_raster,
+                args=(
+                    reproduce_env.predict_path(landcover_local_path),
+                    GLOBIO_AG_CODES, mask_target_path),
+                target_path_list=[mask_target_path],
+                dependent_task_list=[landcover_fetch_task])
+
+            task_graph.add_task(
+                func=register_data,
+                args=(
+                    reproduce_env,
+                    mask_key,
+                    local_mask_path,
+                    None,
+                    None),
+                dependent_task_list=[mask_task])
 
     task_graph.close()
     task_graph.join()
@@ -305,6 +313,15 @@ def mask_raster(base_path, codes, target_path):
 
     pygeoprocessing.raster_calculator(
         [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2)
+
+def register_data(
+    reproduce_env, data_key, local_path, expected_hash, constructor_func):
+    reproduce_env.register_data(
+        data_key,
+        local_path,
+        expected_hash=expected_hash,
+        constructor_func=constructor_func)
+
 
 if __name__ == '__main__':
     main()

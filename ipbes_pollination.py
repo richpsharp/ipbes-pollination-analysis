@@ -33,12 +33,13 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = '.'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = -1
+N_WORKERS = 2
 
 
 def main():
     """Entry point."""
     reproduce_env = reproduce.Reproduce(WORKING_DIR)
+    LOGGER.debug(reproduce_env['CACHE_DIR'])
     task_graph = taskgraph.TaskGraph(
         reproduce_env['CACHE_DIR'], N_WORKERS)
 
@@ -130,20 +131,36 @@ def main():
         }
 
     for landcover_key, (landcover_url, expected_hash) in landcover_data.iteritems():
-        reproduce_env.register_data(
-            landcover_key,
-            'landcover/%s.tif' % landcover_key,
-            expected_hash=expected_hash,
-            constructor_func=google_bucket_fetcher(
-                landcover_url, GOOGLE_BUCKET_KEY_PATH))
+        landcover_local_path = 'landcover/%s.tif' % landcover_key
+        landcover_fetch_task = task_graph.add_task(
+            func=functools.partial(
+                reproduce_env.register_data, landcover_key,
+                landcover_local_path,  **{
+                    'expected_hash': expected_hash,
+                    'constructor_func': functools.partial(
+                        google_bucket_fetcher,
+                        landcover_url, GOOGLE_BUCKET_KEY_PATH)}))
+
         ag_mask_key = '%s_ag_mask' % landcover_key
         local_ag_path = 'ag_mask/%s.tif' % ag_mask_key
         ag_target_path = reproduce_env.predict_path(local_ag_path)
-        reproduce_env.register_data(
-            ag_mask_key,
-            local_ag_path,
-            constructor_func=functools.partial(
-                mask_raster, reproduce_env[landcover_key], GLOBIO_AG_CODES))
+
+        mask_task = task_graph.add_task(
+            func=mask_raster,
+            args=(
+                functools.partial(
+                    reproduce_env.predict_path, landcover_local_path),
+                GLOBIO_AG_CODES, ag_target_path),
+            target_path_list=[ag_target_path],
+            dependent_task_list=[landcover_fetch_task])
+
+        task_graph.add_task(
+            func=functools.partial(
+                reproduce_env.register_data, ag_mask_key, local_ag_path),
+            dependent_task_list=[mask_task])
+
+    task_graph.close()
+    task_graph.join()
 
     # next need to mask landcover into 'agriculture' and 'native'
 
@@ -259,6 +276,7 @@ class MaskCodes(object):
 
     def __call__(self, base_array):
         return numpy.isin(base_array, self.code_array)
+
 
 def mask_raster(base_path, codes, target_path):
     """Mask `base_path` to 1 where values are in codes. 0 otherwise.

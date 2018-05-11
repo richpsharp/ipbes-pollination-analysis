@@ -130,6 +130,7 @@ def main():
             ('md5', 'f5db818a5b16799bf2cb627e574120a4')),
         }
 
+    # mask landcover into agriculture and pollinator habitat
     for landcover_key, (landcover_url, expected_hash) in landcover_data.iteritems():
         landcover_local_path = 'landcover/%s.tif' % landcover_key
         landcover_fetch_task = task_graph.add_task(
@@ -143,6 +144,8 @@ def main():
                     google_bucket_fetcher,
                     landcover_url, GOOGLE_BUCKET_KEY_PATH)))
 
+        hab_task_path_list = []
+
         for mask_prefix, globio_codes in [
                 ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
             mask_key = '%s_%s_mask' % (landcover_key, mask_prefix)
@@ -153,11 +156,11 @@ def main():
                 func=mask_raster,
                 args=(
                     reproduce_env.predict_path(landcover_local_path),
-                    GLOBIO_AG_CODES, mask_target_path),
+                    globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task])
 
-            task_graph.add_task(
+            mask_register_task = task_graph.add_task(
                 func=register_data,
                 args=(
                     reproduce_env,
@@ -167,10 +170,27 @@ def main():
                     None),
                 dependent_task_list=[mask_task])
 
+            if mask_prefix == 'hab':
+                hab_task_path_list.append(
+                    (mask_register_task, local_mask_path, landcover_key))
+
+        for mask_task, local_mask_path, landcover_key in hab_task_path_list:
+            proportional_hab_area_2km_key = (
+                '%s_hab_prop_area_2km' % landcover_key)
+            local_proportional_hab_area_2km_path = (
+                'proportional_area/%s.tif' % proportional_hab_area_2km_key)
+            task_graph.add_task(
+                func=pygeoprocessing.convolve_2d,
+                args=(
+                    (reproduce_env.predict_path(local_mask_path), 1),
+                    (reproduce_env['kernel_raster'], 1),
+                    reproduce_env.predict_path(
+                        local_proportional_hab_area_2km_path)),
+                kwargs={'working_dir': reproduce_env['CACHE_DIR']},
+                dependent_task_list=[mask_task])
+
     task_graph.close()
     task_graph.join()
-
-    # next need to mask landcover into 'agriculture' and 'native'
 
     """
     pygeoprocessing.convolve_2d(
@@ -314,8 +334,10 @@ def mask_raster(base_path, codes, target_path):
     pygeoprocessing.raster_calculator(
         [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2)
 
+
 def register_data(
-    reproduce_env, data_key, local_path, expected_hash, constructor_func):
+        reproduce_env, data_key, local_path, expected_hash, constructor_func):
+    """Wrap a call to `reproduce_env.register_data` for pickling."""
     reproduce_env.register_data(
         data_key,
         local_path,

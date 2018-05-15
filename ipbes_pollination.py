@@ -158,7 +158,8 @@ def main():
                     reproduce_env.predict_path(landcover_local_path),
                     globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
-                dependent_task_list=[landcover_fetch_task])
+                dependent_task_list=[landcover_fetch_task],
+                priority=-1)
 
             mask_register_task = task_graph.add_task(
                 func=register_data,
@@ -168,7 +169,8 @@ def main():
                     local_mask_path,
                     None,
                     None),
-                dependent_task_list=[mask_task])
+                dependent_task_list=[mask_task],
+                priority=0)
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -186,8 +188,11 @@ def main():
                     (reproduce_env['kernel_raster'], 1),
                     reproduce_env.predict_path(
                         local_proportional_hab_area_2km_path)),
-                kwargs={'working_dir': reproduce_env['CACHE_DIR']},
-                dependent_task_list=[mask_task])
+                kwargs={
+                    'working_dir': reproduce_env['CACHE_DIR'],
+                    },
+                dependent_task_list=[mask_task],
+                priority=1)
 
     task_graph.close()
     task_graph.join()

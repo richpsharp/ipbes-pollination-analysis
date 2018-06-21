@@ -1,0 +1,12 @@
+# requirements.txt
+# --------------------
+
+GDAL>=2.0,<3.0
+pygeoprocessing>=1.0.1
+google.cloud
+pandas>=0.22.0
+numpy>=1.11.0
+scipy>=0.16.1
+taskgraph>=0.5.1
+# psutil is used, but not required, by taskgraph to lower process priority
+psutil>=5.2.2

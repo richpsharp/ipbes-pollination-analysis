@@ -159,7 +159,7 @@ def main():
                     globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
-                )
+                priority=-1)
 
             mask_register_task = task_graph.add_task(
                 func=register_data,
@@ -169,7 +169,8 @@ def main():
                     local_mask_path,
                     None,
                     None),
-                dependent_task_list=[mask_task])
+                dependent_task_list=[mask_task],
+                priority=0)
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -193,7 +194,8 @@ def main():
                         'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                         'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
                         'NUM_THREADS=ALL_CPUS')},
-                dependent_task_list=[mask_task])
+                dependent_task_list=[mask_task],
+                priority=1)
 
     task_graph.close()
     task_graph.join()

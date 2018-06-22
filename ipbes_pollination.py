@@ -131,7 +131,7 @@ def main():
         }
 
     # mask landcover into agriculture and pollinator habitat
-    for landcover_key, (landcover_url, expected_hash) in landcover_data.iteritems():
+    for landcover_key, (landcover_url, expected_hash) in landcover_data.items():
         landcover_local_path = 'landcover/%s.tif' % landcover_key
         landcover_fetch_task = task_graph.add_task(
             func=register_data,
@@ -158,7 +158,8 @@ def main():
                     reproduce_env.predict_path(landcover_local_path),
                     globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
-                dependent_task_list=[landcover_fetch_task])
+                dependent_task_list=[landcover_fetch_task],
+                )
 
             mask_register_task = task_graph.add_task(
                 func=register_data,
@@ -186,7 +187,12 @@ def main():
                     (reproduce_env['kernel_raster'], 1),
                     reproduce_env.predict_path(
                         local_proportional_hab_area_2km_path)),
-                kwargs={'working_dir': reproduce_env['CACHE_DIR']},
+                kwargs={
+                    'working_dir': reproduce_env['CACHE_DIR'],
+                    'gtiff_creation_options': (
+                        'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
+                        'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+                        'NUM_THREADS=ALL_CPUS')},
                 dependent_task_list=[mask_task])
 
     task_graph.close()
@@ -235,7 +241,7 @@ def create_radial_convolution_mask(
     n_pixels = (int(pixel_radius) * 2 + 1)
     sample_pixels = 200
     mask = numpy.ones((sample_pixels * n_pixels, sample_pixels * n_pixels))
-    mask[mask.shape[0]/2, mask.shape[0]/2] = 0
+    mask[mask.shape[0]//2, mask.shape[0]//2] = 0
     distance_transform = scipy.ndimage.morphology.distance_transform_edt(mask)
     mask = None
     stratified_distance = distance_transform * pixel_size_m / sample_pixels
@@ -332,7 +338,11 @@ def mask_raster(base_path, codes, target_path):
     LOGGER.debug('expanded code array %s', code_array)
 
     pygeoprocessing.raster_calculator(
-        [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2)
+        [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2,
+        gtiff_creation_options=(
+            'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
+            'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+            'NUM_THREADS=ALL_CPUS'))
 
 
 def register_data(

@@ -3,6 +3,7 @@ Pollination analysis for IPBES.
 
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
 """
+import os
 import re
 import logging
 import functools
@@ -33,7 +34,7 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = '.'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = 2
+N_WORKERS = -1
 
 
 def main():
@@ -62,7 +63,8 @@ def main():
         'crop_nutrient_table',
         'pollination_data/crop_nutrient.csv',
         expected_hash=('md5', '2fbe7455357f8008a12827fd88816fc1'),
-        constructor_func=google_bucket_fetcher(
+        constructor_func=functools.partial(
+            google_bucket_fetcher,
             'https://storage.googleapis.com/ecoshard-root/'
             'crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
             GOOGLE_BUCKET_KEY_PATH))
@@ -80,7 +82,8 @@ def main():
         'globio_class_table',
         'pollination_data/GLOBIOluclass.csv',
         expected_hash=('md5', '4506b5c87fe70f7fba63eb4ee5b1e2d0'),
-        constructor_func=google_bucket_fetcher(
+        constructor_func=functools.partial(
+            google_bucket_fetcher,
             'https://storage.cloud.google.com/ecoshard-root/'
             'GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv',
             GOOGLE_BUCKET_KEY_PATH))
@@ -101,45 +104,27 @@ def main():
     globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
 
     landcover_data = {
-        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP5_RCP85_md5_1b3cc1ce6d0ff14d66da676ef194f130.tif",
-            ('md5', '1b3cc1ce6d0ff14d66da676ef194f130')),
-        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_803166420f51e5ef7dcaa970faa98173.tif",
-            ('md5', '803166420f51e5ef7dcaa970faa98173')),
-        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_e77077a3220a36f7f0441bbd0f7f14ab.tif",
-            ('md5', 'e77077a3220a36f7f0441bbd0f7f14ab')),
-        'Globio4_landuse_10sec_1850': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1850_md5_0b7fcb4b180d46b4fc2245beee76d6b9.tif",
-            ('md5', '0b7fcb4b180d46b4fc2245beee76d6b9')),
-        'Globio4_landuse_10sec_2015': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_2015_md5_939a57c2437cd09bd5a9eb472b9bd781.tif",
-            ('md5', '939a57c2437cd09bd5a9eb472b9bd781')),
-        'Globio4_landuse_10sec_1980': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1980_md5_f6384eac7579318524439df9530ca1f4.tif",
-            ('md5', 'f6384eac7579318524439df9530ca1f4')),
-        'Globio4_landuse_10sec_1945': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1945_md5_52c7b4c38c26defefa61132fd25c5584.tif",
-            ('md5', '52c7b4c38c26defefa61132fd25c5584')),
-        'Globio4_landuse_10sec_1910': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1910_md5_e7da8fa29db305ff63c99fed7ca8d5e2.tif",
-            ('md5', 'e7da8fa29db305ff63c99fed7ca8d5e2')),
-        'Globio4_landuse_10sec_1900': (
-            "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1900_md5_f5db818a5b16799bf2cb627e574120a4.tif",
-            ('md5', 'f5db818a5b16799bf2cb627e574120a4')),
+        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP5_RCP85_md5_1b3cc1ce6d0ff14d66da676ef194f130.tif",
+        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_803166420f51e5ef7dcaa970faa98173.tif",
+        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_e77077a3220a36f7f0441bbd0f7f14ab.tif",
+        'Globio4_landuse_10sec_1850': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1850_md5_0b7fcb4b180d46b4fc2245beee76d6b9.tif",
+        'Globio4_landuse_10sec_2015': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_2015_md5_939a57c2437cd09bd5a9eb472b9bd781.tif",
+        'Globio4_landuse_10sec_1980': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1980_md5_f6384eac7579318524439df9530ca1f4.tif",
+        'Globio4_landuse_10sec_1945': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1945_md5_52c7b4c38c26defefa61132fd25c5584.tif",
+        'Globio4_landuse_10sec_1910': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1910_md5_e7da8fa29db305ff63c99fed7ca8d5e2.tif",
+        'Globio4_landuse_10sec_1900': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1900_md5_f5db818a5b16799bf2cb627e574120a4.tif",
         }
 
     # mask landcover into agriculture and pollinator habitat
-    for landcover_key, (landcover_url, expected_hash) in landcover_data.items():
-        landcover_local_path = 'landcover/%s.tif' % landcover_key
+    for landcover_key, landcover_url in landcover_data.items():
+        landcover_local_path = f'landcover/{os.path.basename(landcover_url)}'
         landcover_fetch_task = task_graph.add_task(
             func=register_data,
             args=(
                 reproduce_env,
                 landcover_key,
                 landcover_local_path,
-                expected_hash,
+                'embedded',
                 functools.partial(
                     google_bucket_fetcher,
                     landcover_url, GOOGLE_BUCKET_KEY_PATH)))
@@ -274,10 +259,11 @@ def create_radial_convolution_mask(
     kernel_band.WriteArray(kernel_array)
 
 
-def google_bucket_fetcher(url, json_key_path):
+def google_bucket_fetcher(target_path, url, json_key_path):
     """Create a function to download a Google Blob to a given path.
 
     Parameters:
+        target_path (string): path to target file.
         url (string): url to blob, matches the form
             '^https://storage.cloud.google.com/([^/]*)/(.*)$'
         json_key_path (string): path to Google Cloud private key generated
@@ -288,22 +274,19 @@ def google_bucket_fetcher(url, json_key_path):
             this function will download the Blob to `path`.
 
     """
-    def _google_bucket_fetcher(path):
-        """Fetch blob `url` to `path`."""
-        url_matcher = re.match(
-            '^https://[^/]*\.com/([^/]*)/(.*)$', url)
-        LOGGER.debug(url)
-        client = google.cloud.storage.client.Client.from_service_account_json(
-            json_key_path)
-        bucket_id = url_matcher.group(1)
-        LOGGER.debug('parsing bucket %s from %s', bucket_id, url)
-        bucket = client.get_bucket(bucket_id)
-        blob_id = url_matcher.group(2)
-        LOGGER.debug('loading blob %s from %s', blob_id, url)
-        blob = google.cloud.storage.Blob(blob_id, bucket)
-        LOGGER.info('downloading blob %s from %s' % (path, url))
-        blob.download_to_filename(path)
-    return _google_bucket_fetcher
+    url_matcher = re.match(
+        '^https://[^/]*\.com/([^/]*)/(.*)$', url)
+    LOGGER.debug(url)
+    client = google.cloud.storage.client.Client.from_service_account_json(
+        json_key_path)
+    bucket_id = url_matcher.group(1)
+    LOGGER.debug('parsing bucket %s from %s', bucket_id, url)
+    bucket = client.get_bucket(bucket_id)
+    blob_id = url_matcher.group(2)
+    LOGGER.debug('loading blob %s from %s', blob_id, url)
+    blob = google.cloud.storage.Blob(blob_id, bucket)
+    LOGGER.info('downloading blob %s from %s' % (target_path, url))
+    blob.download_to_filename(target_path)
 
 
 class MaskCodes(object):

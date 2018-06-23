@@ -34,7 +34,7 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = '.'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = -1
+N_WORKERS = 4
 
 
 def main():
@@ -61,8 +61,8 @@ def main():
     # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
     reproduce_env.register_data(
         'crop_nutrient_table',
-        'pollination_data/crop_nutrient.csv',
-        expected_hash=('md5', '2fbe7455357f8008a12827fd88816fc1'),
+        'pollination_data/crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
+        expected_hash='embedded',
         constructor_func=functools.partial(
             google_bucket_fetcher,
             'https://storage.googleapis.com/ecoshard-root/'
@@ -80,8 +80,8 @@ def main():
     #  so we do not include it in our final analysis or code base.
     reproduce_env.register_data(
         'globio_class_table',
-        'pollination_data/GLOBIOluclass.csv',
-        expected_hash=('md5', '4506b5c87fe70f7fba63eb4ee5b1e2d0'),
+        'pollination_data/GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv',
+        expected_hash='embedded',
         constructor_func=functools.partial(
             google_bucket_fetcher,
             'https://storage.cloud.google.com/ecoshard-root/'
@@ -93,12 +93,9 @@ def main():
     #  232) at 10 arc seconds (~300 m) resolution. This 2 km scale represents
     #  the distance most commonly found to be predictive of pollination
     #  services (Kennedy et al. 2013).
-    reproduce_env.register_data(
-        'kernel_raster',
-        'kernel_raster.tif',
-        constructor_func=(
-            lambda kernel_filepath: create_radial_convolution_mask(
-                0.00277778, 2000., kernel_filepath)))
+    kernel_raster_path = os.path.join(
+        reproduce_env['DATA_DIR'], 'radial_kernel.tif')
+    create_radial_convolution_mask(0.00277778, 2000., kernel_raster_path)
 
     crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
     globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
@@ -117,13 +114,13 @@ def main():
 
     # mask landcover into agriculture and pollinator habitat
     for landcover_key, landcover_url in landcover_data.items():
-        landcover_local_path = f'landcover/{os.path.basename(landcover_url)}'
+        landcover_env_path = f'landcover/{os.path.basename(landcover_url)}'
         landcover_fetch_task = task_graph.add_task(
             func=register_data,
             args=(
                 reproduce_env,
                 landcover_key,
-                landcover_local_path,
+                landcover_env_path,
                 'embedded',
                 functools.partial(
                     google_bucket_fetcher,
@@ -133,46 +130,34 @@ def main():
 
         for mask_prefix, globio_codes in [
                 ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
-            mask_key = '%s_%s_mask' % (landcover_key, mask_prefix)
-            local_mask_path = '%s_mask/%s.tif' % (mask_prefix, mask_key)
-            mask_target_path = reproduce_env.predict_path(local_mask_path)
+            mask_key = f'{landcover_key}_{mask_prefix}_mask'
+            mask_target_path = os.path.join(
+                reproduce_env['DATA_DIR'],
+                f'{mask_prefix}_mask/{mask_key}.tif')
 
             mask_task = task_graph.add_task(
                 func=mask_raster,
                 args=(
-                    reproduce_env.predict_path(landcover_local_path),
+                    reproduce_env.predict_path(landcover_env_path),
                     globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
                 priority=-1)
 
-            mask_register_task = task_graph.add_task(
-                func=register_data,
-                args=(
-                    reproduce_env,
-                    mask_key,
-                    local_mask_path,
-                    None,
-                    None),
-                dependent_task_list=[mask_task],
-                priority=0)
-
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
-                    (mask_register_task, local_mask_path, landcover_key))
+                    (mask_task, mask_target_path))
 
-        for mask_task, local_mask_path, landcover_key in hab_task_path_list:
-            proportional_hab_area_2km_key = (
-                '%s_hab_prop_area_2km' % landcover_key)
-            local_proportional_hab_area_2km_path = (
-                'proportional_area/%s.tif' % proportional_hab_area_2km_key)
-            task_graph.add_task(
+        raster_tasks_to_threshold_list = []
+        for mask_task, mask_path, in hab_task_path_list:
+            proportional_hab_area_2km_path = os.path.join(
+                reproduce_env['DATA_DIR'], 'proportional_area',
+                f'{landcover_key}_hab_prop_area_2km.tif')
+            convolve2d_task = task_graph.add_task(
                 func=pygeoprocessing.convolve_2d,
-                args=(
-                    (reproduce_env.predict_path(local_mask_path), 1),
-                    (reproduce_env['kernel_raster'], 1),
-                    reproduce_env.predict_path(
-                        local_proportional_hab_area_2km_path)),
+                args=[
+                    (mask_path, 1), (kernel_raster_path, 1),
+                    proportional_hab_area_2km_path],
                 kwargs={
                     'working_dir': reproduce_env['CACHE_DIR'],
                     'gtiff_creation_options': (
@@ -181,31 +166,38 @@ def main():
                         'NUM_THREADS=ALL_CPUS')},
                 dependent_task_list=[mask_task],
                 priority=1)
+            raster_tasks_to_threshold_list.append(
+                (convolve2d_task, proportional_hab_area_2km_path))
+
+        #  1.1.4.  Sufficiency threshold
+        #  A threshold of 0.3 was set to evaluate whether there was sufficient
+        #   pollinator habitat in the 2 km around farmland to provide pollination
+        #   services, based on Kremen et al.'s (2005)  estimate of the area
+        #   requirements for achieving full pollination. This produced a map of
+        #   wild pollination sufficiency where every agricultural pixel was
+        #   designated in a binary fashion: 0 if proportional area of habitat was
+        #   less than 0.3; 1 if greater than 0.3. Maps of pollination sufficiency
+        #   can be found at (permanent link to output), outputs "poll_suff_..."
+        #   below.
+        # TODO: threshold
+        threshold_val = 0.3
+        for convolve2d_task, proportional_hab_area_2km_path in (
+                raster_tasks_to_threshold_list):
+            thresholded_path = os.path.join(
+                reproduce_env['DATA_DIR'],
+                'thresholded_'
+                f'{os.path.basename(proportional_hab_area_2km_path)}')
+            task_graph.add_task(
+                func=threshold_raster,
+                args=(
+                    proportional_hab_area_2km_path, threshold_val,
+                    thresholded_path),
+                target_path_list=[thresholded_path],
+                dependent_task_list=[convolve2d_task],
+                task_name=f'threshold {os.path.basename(thresholded_path)}')
 
     task_graph.close()
     task_graph.join()
-
-    """
-    pygeoprocessing.convolve_2d(
-        signal_path_band, kernel_path_band, target_path,
-        ignore_nodata=False, mask_nodata=True, normalize_kernel=False,
-        target_datatype=gdal.GDT_Float64,
-        target_nodata=None,
-        gtiff_creation_options=_DEFAULT_GTIFF_CREATION_OPTIONS,
-        working_dir=None)
-    """
-
-    #  1.1.4.  Sufficiency threshold
-    #  A threshold of 0.3 was set to evaluate whether there was sufficient
-    #   pollinator habitat in the 2 km around farmland to provide pollination
-    #   services, based on Kremen et al.'s (2005)  estimate of the area
-    #   requirements for achieving full pollination. This produced a map of
-    #   wild pollination sufficiency where every agricultural pixel was
-    #   designated in a binary fashion: 0 if proportional area of habitat was
-    #   less than 0.3; 1 if greater than 0.3. Maps of pollination sufficiency
-    #   can be found at (permanent link to output), outputs "poll_suff_..."
-    #   below.
-    # TODO: threshold
 
 
 def create_radial_convolution_mask(
@@ -239,6 +231,7 @@ def create_radial_convolution_mask(
         in_circle.shape[0] // sample_pixels, sample_pixels,
         in_circle.shape[1] // sample_pixels, sample_pixels)
     kernel_array = numpy.sum(reshaped, axis=(1, 3)) / sample_pixels**2
+    normalized_kernel_array = kernel_array / numpy.sum(kernel_array)
     reshaped = None
 
     driver = gdal.GetDriverByName('GTiff')
@@ -256,18 +249,18 @@ def create_radial_convolution_mask(
     kernel_raster.SetProjection(srs.ExportToWkt())
     kernel_band = kernel_raster.GetRasterBand(1)
     kernel_band.SetNoDataValue(NODATA)
-    kernel_band.WriteArray(kernel_array)
+    kernel_band.WriteArray(normalized_kernel_array)
 
 
-def google_bucket_fetcher(target_path, url, json_key_path):
+def google_bucket_fetcher(url, json_key_path, target_path):
     """Create a function to download a Google Blob to a given path.
 
     Parameters:
-        target_path (string): path to target file.
         url (string): url to blob, matches the form
             '^https://storage.cloud.google.com/([^/]*)/(.*)$'
         json_key_path (string): path to Google Cloud private key generated
             by https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+        target_path (string): path to target file.
 
     Returns:
         a function with a single `path` argument to the target file. Invoking
@@ -280,12 +273,12 @@ def google_bucket_fetcher(target_path, url, json_key_path):
     client = google.cloud.storage.client.Client.from_service_account_json(
         json_key_path)
     bucket_id = url_matcher.group(1)
-    LOGGER.debug('parsing bucket %s from %s', bucket_id, url)
+    LOGGER.debug(f'parsing bucket {bucket_id} from {url}')
     bucket = client.get_bucket(bucket_id)
     blob_id = url_matcher.group(2)
-    LOGGER.debug('loading blob %s from %s', blob_id, url)
+    LOGGER.debug(f'loading blob {blob_id} from {url}')
     blob = google.cloud.storage.Blob(blob_id, bucket)
-    LOGGER.info('downloading blob %s from %s' % (target_path, url))
+    LOGGER.info(f'downloading blob {target_path} from {url}')
     blob.download_to_filename(target_path)
 
 
@@ -295,6 +288,48 @@ class MaskCodes(object):
 
     def __call__(self, base_array):
         return numpy.isin(base_array, self.code_array)
+
+
+class Threshold(object):
+    def __init__(self, threshold_val, nodata_val, target_nodata):
+        self.threshold_val = threshold_val
+        self.nodata_val = nodata_val
+        self.target_nodata = target_nodata
+
+    def __call__(self, base_array):
+        result = numpy.empty(base_array.shape, dtype=numpy.uint8)
+        result[:] = target_nodata
+        valid_mask = (base_array != nodata_val)
+        result[valid_mask] = 0.0
+        result[valid_mask & (base_array >= threshold_val)] = 1.0
+        return result
+
+
+def threshold_raster(base_path, threshold_val, target_path):
+    """Threshold base to be 1 if >= `theshold_val`.
+
+    Parameters:
+        base_path (string): path to single band raster.
+        threshold_val (numeric): value to use as threshold cutoff
+        target_path (string): path to desired output raster, raster is a
+            byte type with same dimensions and projection as `base_path`.
+            A pixel in this raster will be 1 if the corresponding pixel in
+            `base_path` is >= `threshold_val`, 0 in all other cases.
+
+    Returns:
+        None.
+
+    """
+
+    base_nodata = pygeoprocessing.get_raster_info(base_path)['nodata'][0]
+    target_nodata = 2
+    pygeoprocessing.raster_calculator(
+        [(base_path, 1)],
+        Threshold(threshold_val, base_nodata, target_nodata), target_path,
+        gdal.GDT_Byte, target_nodata, gtiff_creation_options=(
+            'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
+            'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+            'NUM_THREADS=ALL_CPUS'))
 
 
 def mask_raster(base_path, codes, target_path):
@@ -320,11 +355,11 @@ def mask_raster(base_path, codes, target_path):
             range(x[0], x[1]+1) if isinstance(x, tuple) else [x]
             for x in codes] for item in sublist]
     code_array = numpy.array(code_list)
-    LOGGER.debug('expanded code array %s', code_array)
+    LOGGER.debug(f'expanded code array {code_array}')
 
     pygeoprocessing.raster_calculator(
-        [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte, 2,
-        gtiff_creation_options=(
+        [(base_path, 1)], MaskCodes(code_array), target_path, gdal.GDT_Byte,
+        2, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
             'NUM_THREADS=ALL_CPUS'))

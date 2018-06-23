@@ -31,7 +31,7 @@ LOGGER = logging.getLogger('ipbes_pollination')
 GLOBIO_AG_CODES = [2, (230, 232)]
 GLOBIO_NATURAL_CODES = [6, (50, 180)]
 
-WORKING_DIR = '.'
+WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
 N_WORKERS = 4
@@ -124,7 +124,10 @@ def main():
                 'embedded',
                 functools.partial(
                     google_bucket_fetcher,
-                    landcover_url, GOOGLE_BUCKET_KEY_PATH)))
+                    landcover_url, GOOGLE_BUCKET_KEY_PATH)),
+            target_path_list=[reproduce_env.predict_path(landcover_env_path)],
+            priority=0,
+            task_name=f'fetch {landcover_key}')
 
         hab_task_path_list = []
 
@@ -142,7 +145,8 @@ def main():
                     globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
-                priority=-1)
+                priority=1,
+                task_name=f'mask {mask_key}')
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -165,7 +169,10 @@ def main():
                         'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
                         'NUM_THREADS=ALL_CPUS')},
                 dependent_task_list=[mask_task],
-                priority=1)
+                priority=2,
+                task_name=(
+                    'calculate proportional'
+                    f' {os.path.basename(proportional_hab_area_2km_path)}'))
             raster_tasks_to_threshold_list.append(
                 (convolve2d_task, proportional_hab_area_2km_path))
 
@@ -194,6 +201,7 @@ def main():
                     thresholded_path),
                 target_path_list=[thresholded_path],
                 dependent_task_list=[convolve2d_task],
+                priority=3,
                 task_name=f'threshold {os.path.basename(thresholded_path)}')
 
     task_graph.close()

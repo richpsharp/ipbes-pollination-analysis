@@ -134,7 +134,7 @@ def main():
         _ = task_graph.add_task(
             func=build_overviews,
             args=(landcover_path, 'mode'),
-            target_path_list=[f'{os.path.basename(landcover_path)[0]}.ovr'],
+            target_path_list=[f'{os.path.basename(landcover_path)}.ovr'],
             dependent_task_list=[landcover_fetch_task])
 
         hab_task_path_list = []
@@ -160,7 +160,7 @@ def main():
                 func=build_overviews,
                 args=(mask_target_path, 'mode'),
                 target_path_list=[
-                    f'{os.path.basename(mask_target_path)[0]}.ovr'],
+                    f'{os.path.basename(mask_target_path)}.ovr'],
                 dependent_task_list=[mask_task])
 
             if mask_prefix == 'hab':
@@ -194,7 +194,7 @@ def main():
                 func=build_overviews,
                 args=(proportional_hab_area_2km_path, 'average'),
                 target_path_list=[
-                    f'{os.path.basename(proportional_hab_area_2km_path)[0]}.ovr'],
+                    f'{os.path.basename(proportional_hab_area_2km_path)}.ovr'],
                 dependent_task_list=[convolve2d_task])
 
             raster_tasks_to_threshold_list.append(
@@ -231,7 +231,7 @@ def main():
                 func=build_overviews,
                 args=(thresholded_path, 'mode'),
                 target_path_list=[
-                    f'{os.path.basename(thresholded_path)[0]}.ovr'],
+                    f'{os.path.basename(thresholded_path)}.ovr'],
                 dependent_task_list=[threshold_task])
 
     task_graph.close()

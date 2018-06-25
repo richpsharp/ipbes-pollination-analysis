@@ -457,7 +457,7 @@ def _make_logger_callback(message):
         Function with signature:
             logger_callback(df_complete, psz_message, p_progress_arg)
     """
-    def logger_callback(df_complete, _, _):
+    def logger_callback(df_complete, psz_message, p_progress_arg):
         """The argument names come from the GDAL API for callbacks."""
         try:
             current_time = time.time()

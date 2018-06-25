@@ -3,12 +3,12 @@ Pollination analysis for IPBES.
 
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
 """
+import time
 import os
 import re
 import logging
 import functools
 
-import pygeoprocessing
 import google.cloud.client
 import google.cloud.storage
 from osgeo import gdal
@@ -18,6 +18,7 @@ import numpy
 import scipy.ndimage.morphology
 import reproduce
 import taskgraph
+import pygeoprocessing
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -115,6 +116,7 @@ def main():
     # mask landcover into agriculture and pollinator habitat
     for landcover_key, landcover_url in landcover_data.items():
         landcover_env_path = f'landcover/{os.path.basename(landcover_url)}'
+        landcover_path = reproduce_env.predict_path(landcover_env_path)
         landcover_fetch_task = task_graph.add_task(
             func=register_data,
             args=(
@@ -125,9 +127,15 @@ def main():
                 functools.partial(
                     google_bucket_fetcher,
                     landcover_url, GOOGLE_BUCKET_KEY_PATH)),
-            target_path_list=[reproduce_env.predict_path(landcover_env_path)],
+            target_path_list=[landcover_path],
             priority=0,
             task_name=f'fetch {landcover_key}')
+
+        _ = task_graph.add_task(
+            func=build_overviews,
+            args=(landcover_path, 'mode'),
+            target_path_list=[f'{os.path.splitext(landcover_path)[0]}.ovr'],
+            dependent_task_list=[landcover_fetch_task])
 
         hab_task_path_list = []
 
@@ -147,6 +155,13 @@ def main():
                 dependent_task_list=[landcover_fetch_task],
                 priority=1,
                 task_name=f'mask {mask_key}')
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                args=(mask_target_path, 'mode'),
+                target_path_list=[
+                    f'{os.path.splitext(mask_target_path)[0]}.ovr'],
+                dependent_task_list=[mask_task])
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -169,10 +184,19 @@ def main():
                         'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
                         'NUM_THREADS=ALL_CPUS')},
                 dependent_task_list=[mask_task],
+                target_path_list=[proportional_hab_area_2km_path],
                 priority=2,
                 task_name=(
                     'calculate proportional'
                     f' {os.path.basename(proportional_hab_area_2km_path)}'))
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                args=(proportional_hab_area_2km_path, 'average'),
+                target_path_list=[
+                    f'{os.path.splitext(proportional_hab_area_2km_path)[0]}.ovr'],
+                dependent_task_list=[convolve2d_task])
+
             raster_tasks_to_threshold_list.append(
                 (convolve2d_task, proportional_hab_area_2km_path))
 
@@ -186,7 +210,6 @@ def main():
         #   less than 0.3; 1 if greater than 0.3. Maps of pollination sufficiency
         #   can be found at (permanent link to output), outputs "poll_suff_..."
         #   below.
-        # TODO: threshold
         threshold_val = 0.3
         for convolve2d_task, proportional_hab_area_2km_path in (
                 raster_tasks_to_threshold_list):
@@ -194,7 +217,7 @@ def main():
                 reproduce_env['DATA_DIR'],
                 'thresholded_'
                 f'{os.path.basename(proportional_hab_area_2km_path)}')
-            task_graph.add_task(
+            threshold_task = task_graph.add_task(
                 func=threshold_raster,
                 args=(
                     proportional_hab_area_2km_path, threshold_val,
@@ -203,6 +226,13 @@ def main():
                 dependent_task_list=[convolve2d_task],
                 priority=3,
                 task_name=f'threshold {os.path.basename(thresholded_path)}')
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                args=(thresholded_path, 'mode'),
+                target_path_list=[
+                    f'{os.path.splitext(thresholded_path)[0]}.ovr'],
+                dependent_task_list=[threshold_task])
 
     task_graph.close()
     task_graph.join()
@@ -221,8 +251,8 @@ def create_radial_convolution_mask(
         raster while accounting for partial coverage of the circle on the
         edges of the pixel.
     """
-    degree_len_0 = 110574 # length at 0 degrees
-    degree_len_60 = 111412 # length at 60 degrees
+    degree_len_0 = 110574  # length at 0 degrees
+    degree_len_60 = 111412  # length at 60 degrees
     pixel_size_m = pixel_size_degree * (degree_len_0 + degree_len_60) / 2.0
     pixel_radius = numpy.ceil(radius_meters / pixel_size_m)
     n_pixels = (int(pixel_radius) * 2 + 1)
@@ -276,7 +306,7 @@ def google_bucket_fetcher(url, json_key_path, target_path):
 
     """
     url_matcher = re.match(
-        '^https://[^/]*\.com/([^/]*)/(.*)$', url)
+        r'^https://[^/]*\.com/([^/]*)/(.*)$', url)
     LOGGER.debug(url)
     client = google.cloud.storage.client.Client.from_service_account_json(
         json_key_path)
@@ -306,10 +336,10 @@ class Threshold(object):
 
     def __call__(self, base_array):
         result = numpy.empty(base_array.shape, dtype=numpy.uint8)
-        result[:] = target_nodata
-        valid_mask = (base_array != nodata_val)
+        result[:] = self.target_nodata
+        valid_mask = (base_array != self.nodata_val)
         result[valid_mask] = 0.0
-        result[valid_mask & (base_array >= threshold_val)] = 1.0
+        result[valid_mask & (base_array >= self.threshold_val)] = 1.0
         return result
 
 
@@ -381,6 +411,67 @@ def register_data(
         local_path,
         expected_hash=expected_hash,
         constructor_func=constructor_func)
+
+
+def build_overviews(local_path, resample_method):
+    """Builds as many overviews as possible using 'average' interpolation.
+
+    Parameters:
+        local_path (string): path to GTiff raster to build overviews on. The
+            overview will be built externally in a .ovr file in the same
+            directory.
+        resample_method (string): interpolation mode for overviews, must be one of
+            'nearest', 'average', 'gauss', 'cubic', 'cubicspline', 'lanczos',
+            'average_mp', 'average_magphase', 'mode'.
+
+    Returns:
+        None.
+
+    """
+    min_dimension = min(
+        pygeoprocessing.get_raster_info(local_path)['raster_size'])
+    LOGGER.info(f"min min_dimension {min_dimension}")
+    raster_copy = gdal.Open(local_path)
+
+    overview_levels = []
+    current_level = 2
+    while True:
+        if min_dimension // current_level == 0:
+            break
+        overview_levels.append(current_level)
+        current_level *= 2
+    LOGGER.info(f'level list: {overview_levels}')
+    raster_copy.BuildOverviews(
+        resample_method, overview_levels, callback=_make_logger_callback(
+            f'{local_path} %.2f%% complete'))
+
+
+def _make_logger_callback(message):
+    """Build a timed logger callback that prints `message` replaced.
+
+    Parameters:
+        message (string): a string that expects a %f placement variable,
+            for % complete.
+
+    Returns:
+        Function with signature:
+            logger_callback(df_complete, psz_message, p_progress_arg)
+    """
+    def logger_callback(df_complete, _, _):
+        """The argument names come from the GDAL API for callbacks."""
+        try:
+            current_time = time.time()
+            if ((current_time - logger_callback.last_time) > 5.0 or
+                    (df_complete == 1.0 and
+                     logger_callback.total_time >= 5.0)):
+                LOGGER.info(message, df_complete * 100)
+                logger_callback.last_time = current_time
+                logger_callback.total_time += current_time
+        except AttributeError:
+            logger_callback.last_time = time.time()
+            logger_callback.total_time = 0.0
+
+    return logger_callback
 
 
 if __name__ == '__main__':

@@ -441,6 +441,7 @@ def build_overviews(local_path, resample_method):
         overview_levels.append(current_level)
         current_level *= 2
     LOGGER.info(f'level list: {overview_levels}')
+    gdal.SetConfigOption('COMPRESS_OVERVIEW', 'LZW')
     raster_copy.BuildOverviews(
         resample_method, overview_levels, callback=_make_logger_callback(
             f'{local_path} %.2f%% complete'))

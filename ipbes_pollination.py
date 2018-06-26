@@ -135,7 +135,8 @@ def main():
             func=build_overviews,
             args=(landcover_path, 'mode'),
             target_path_list=[f'{os.path.basename(landcover_path)}.ovr'],
-            dependent_task_list=[landcover_fetch_task])
+            dependent_task_list=[landcover_fetch_task],
+            task_name=f'compress {os.path.basename(landcover_path)}')
 
         hab_task_path_list = []
 
@@ -154,14 +155,15 @@ def main():
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
                 priority=1,
-                task_name=f'mask {mask_key}')
+                task_name=f'mask {mask_key}',)
 
             _ = task_graph.add_task(
                 func=build_overviews,
                 args=(mask_target_path, 'mode'),
                 target_path_list=[
                     f'{os.path.basename(mask_target_path)}.ovr'],
-                dependent_task_list=[mask_task])
+                dependent_task_list=[mask_task],
+                task_name=f'compress {os.path.basename(mask_target_path)}')
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -195,7 +197,8 @@ def main():
                 args=(proportional_hab_area_2km_path, 'average'),
                 target_path_list=[
                     f'{os.path.basename(proportional_hab_area_2km_path)}.ovr'],
-                dependent_task_list=[convolve2d_task])
+                dependent_task_list=[convolve2d_task],
+                task_name=f'compress {os.path.basename(proportional_hab_area_2km_path)}')
 
             raster_tasks_to_threshold_list.append(
                 (convolve2d_task, proportional_hab_area_2km_path))
@@ -232,7 +235,8 @@ def main():
                 args=(thresholded_path, 'mode'),
                 target_path_list=[
                     f'{os.path.basename(thresholded_path)}.ovr'],
-                dependent_task_list=[threshold_task])
+                dependent_task_list=[threshold_task],
+                task_name=f'compress {os.path.basename(thresholded_path)}')
 
     task_graph.close()
     task_graph.join()

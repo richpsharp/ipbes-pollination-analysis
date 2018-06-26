@@ -499,7 +499,7 @@ def unzip_file(zipfile_path, target_dir, touchfile_path):
     with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
         zip_ref.extractall(target_dir)
 
-    with open(touchfile_path, 'w') touchfile:
+    with open(touchfile_path, 'w') as touchfile:
         touchfile.write(f'unzipped {zipfile_path}')
 
 

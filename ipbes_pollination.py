@@ -257,7 +257,7 @@ def main():
     yield_zip_url = (
         'https://storage.cloud.google.com/ecoshard-root/ipbes/'
         'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
-    yield_zip_path = reproduce_env.predict_path(local_yield_zip_path_)
+    yield_zip_path = reproduce_env.predict_path(local_yield_zip_path)
     yield_zip_fetch_task = task_graph.add_task(
         func=register_data,
         args=(
@@ -496,7 +496,7 @@ def unzip_file(zipfile_path, target_dir, touchfile_path):
         None.
 
     """
-    with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
+    with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
         zip_ref.extractall(target_dir)
 
     with open(touchfile_path, 'w') as touchfile:

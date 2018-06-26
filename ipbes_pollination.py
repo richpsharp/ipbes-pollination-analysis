@@ -3,6 +3,7 @@ Pollination analysis for IPBES.
 
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
 """
+import zipfile
 import time
 import os
 import re
@@ -46,31 +47,6 @@ def main():
         reproduce_env['CACHE_DIR'], N_WORKERS)
 
     # The following table is used for:
-    #  Crop pollination dependency was determined for 115 crops. Dependency
-    #   was defined as the percent by which yields are reduced for each crop
-    #   with inadequate pollination (ranging from 0-95%), according to
-    #   Klein et al. (2007).
-    # Crop content of critical macro and micronutrients (KJ energy/100 g, IU
-    #   Vitamin A/ 100 g and mcg Folate/100g) for the 115 crops were taken
-    #   from USDA (2011) . The USDA (2011) data also provided estimated refuse
-    #   of the food item (e.g., peels, seeds). The pollination-dependent yield
-    #   was reduced by this refuse percent and then multiplied by nutrient
-    #   content, and summed across all crops to derive pollination-dependent
-    #   nutrient yields (KJ/ha, IU Vitamin A/ha, mcg Folate/ha) for each
-    #   nutrient at 5 arc min. The full table used in this analysis can be
-    # found at https://storage.googleapis.com/ecoshard-root/'
-    # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
-    reproduce_env.register_data(
-        'crop_nutrient_table',
-        'pollination_data/crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
-        expected_hash='embedded',
-        constructor_func=functools.partial(
-            google_bucket_fetcher,
-            'https://storage.googleapis.com/ecoshard-root/'
-            'crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
-            GOOGLE_BUCKET_KEY_PATH))
-
-    # The following table is used for:
     # Pollinator habitat was defined as any natural land covers, as defined
     #  in Table X  (GLOBIO land-cover classes 6, secondary vegetation, and
     #  50-180, various types of primary vegetation). To test sensitivity to
@@ -98,7 +74,6 @@ def main():
         reproduce_env['DATA_DIR'], 'radial_kernel.tif')
     create_radial_convolution_mask(0.00277778, 2000., kernel_raster_path)
 
-    crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
     globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
 
     landcover_data = {
@@ -237,6 +212,97 @@ def main():
                     f'{thresholded_path}.ovr'],
                 dependent_task_list=[threshold_task],
                 task_name=f'compress {os.path.basename(thresholded_path)}')
+
+
+    # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
+    # Pollination-dependence of crops, crop yields, and crop micronutrient
+    # content were combined in an analysis to calculate pollination-dependent
+    # nutrient production, following Chaplin-Kramer et al. (2012).
+    # 1.2.2.  Pollination dependency
+    # Crop pollination dependency was determined for 115 crops (permanent link
+    # to table). Dependency was defined as the percent by which yields are
+    # reduced for each crop with inadequate pollination (ranging from 0-95%),
+    # according to Klein et al. (2007).
+
+    # Crop content of critical macro and micronutrients (KJ energy/100 g, IU
+    #   Vitamin A/ 100 g and mcg Folate/100g) for the 115 crops were taken
+    #   from USDA (2011) . The USDA (2011) data also provided estimated refuse
+    #   of the food item (e.g., peels, seeds). The pollination-dependent yield
+    #   was reduced by this refuse percent and then multiplied by nutrient
+    #   content, and summed across all crops to derive pollination-dependent
+    #   nutrient yields (KJ/ha, IU Vitamin A/ha, mcg Folate/ha) for each
+    #   nutrient at 5 arc min. The full table used in this analysis can be
+    # found at https://storage.googleapis.com/ecoshard-root/'
+    # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
+    reproduce_env.register_data(
+        'crop_nutrient_table',
+        'pollination_data/crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
+        expected_hash='embedded',
+        constructor_func=functools.partial(
+            google_bucket_fetcher,
+            'https://storage.googleapis.com/ecoshard-root/'
+            'crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
+            GOOGLE_BUCKET_KEY_PATH))
+    crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
+
+    # 1.2.3.  Crop production
+    # Spatially-explicit global crop yields (tons/ha) at 5 arc min (~10 km) were
+    # taken from Monfreda et al. (2008) for 115 crops (permanent link to crop
+    # yield folder). These yields were multiplied by crop pollination dependency
+    # to calculate the pollination-dependent crop yield for each 5 min grid
+    # cell.
+    local_yield_zip_path = (
+        'observed_yields/'
+        'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
+    yield_zip_url = (
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/'
+        'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
+    yield_zip_path = reproduce_env.predict_path(local_yield_zip_path_)
+    yield_zip_fetch_task = task_graph.add_task(
+        func=register_data,
+        args=(
+            reproduce_env,
+            'monfreda_2008_observed_yield',
+            local_yield_zip_path,
+            'embedded',
+            functools.partial(
+                google_bucket_fetcher,
+                yield_zip_url, GOOGLE_BUCKET_KEY_PATH)),
+        target_path_list=[yield_zip_path],
+        priority=0,
+        task_name=f'fetch monfreda 2008 zip')
+
+    zip_touch_file_path = os.path.join(
+        os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield.txt')
+    unzip_yield_task = task_graph.add_task(
+        func=unzip_file,
+        args=(
+            yield_zip_path, os.path.dirname(yield_zip_path),
+            zip_touch_file_path),
+        target_path_list=[zip_touch_file_path],
+        task_name=f'unzip monfreda_2008_observed_yield')
+
+    # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
+    # 1.3.1.  Overview
+    #   Nutrition provided by wild pollinators on each pixel of agricultural
+    # land was calculated according to pollination habitat sufficiency and the
+    # pollination-dependent nutrient yields.
+
+    # 1.3.2.  Nutrition production by wild pollinators
+    #  Pollinator-dependent nutrient yields at 5 arc minutes were applied to
+    # agricultural pixels in the GLOBIO land-use map at 10 arc seconds, and
+    # multiplied by wild pollination sufficiency (1 if sufficient, 0 if not) to
+    # report pollination-derived nutrient yields in each pixel. We call this
+    # "pollinator-derived" instead of "pollination-dependent" because
+    # "dependence" is the proportion that yields are reduced if not adequately
+    # pollinated. Whether that dependent yield is actually produced is
+    # determined by whether there is sufficient natural habitat around the
+    # agricultural pixel in question to provide wild pollinators and hence
+    #adequate pollination to crops.  These pollinator-derived nutrient yields
+    # were then multiplied by the area of the pixel to convert yields to
+    # pixel-level production for each nutrient.  Maps of pollination-derived
+    # nutrient production for each nutrient in each scenario can be found at
+    # (permanent link to output), outputs "poll_serv_..." below.
 
     task_graph.close()
     task_graph.join()
@@ -415,6 +481,26 @@ def register_data(
         local_path,
         expected_hash=expected_hash,
         constructor_func=constructor_func)
+
+
+def unzip_file(zipfile_path, target_dir, touchfile_path):
+    """Unzip contents of `zipfile_path`.
+
+    Parameters:
+        zipfile_path (string): path to a zipped file.
+        target_dir (string): path to extract zip file to.
+        touchfile_path (string): path to a file to create if unzipping is
+            successful.
+
+    Returns:
+        None.
+
+    """
+    with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
+        zip_ref.extractall(target_dir)
+
+    with open(touchfile_path, 'w') touchfile:
+        touchfile.write(f'unzipped {zipfile_path}')
 
 
 def build_overviews(local_path, resample_method):

@@ -150,6 +150,8 @@ def main():
                 hab_task_path_list.append(
                     (mask_task, mask_target_path))
 
+        # TODO: commenting out pollination threshold while I develop total production
+        """
         raster_tasks_to_threshold_list = []
         for mask_task, mask_path, in hab_task_path_list:
             proportional_hab_area_2km_path = os.path.join(
@@ -220,7 +222,7 @@ def main():
                 dependent_task_list=[threshold_task],
                 task_name=f'compress {os.path.basename(thresholded_path)}',
                 priority=-100,)
-
+        """
 
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
     # Pollination-dependence of crops, crop yields, and crop micronutrient
@@ -259,6 +261,7 @@ def main():
     # yield folder). These yields were multiplied by crop pollination dependency
     # to calculate the pollination-dependent crop yield for each 5 min grid
     # cell.
+    # Note the monfredia maps are in units of per-hectare yields
     local_yield_zip_path = (
         'observed_yields/'
         'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
@@ -289,6 +292,23 @@ def main():
             zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
         task_name=f'unzip monfreda_2008_observed_yield')
+
+    yield_raster_dir = os.path.join(
+        os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
+
+    for nutrient_id, nutrient_name in [
+            ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
+        tot_pol_nut_yield_1d_path = os.path.join(
+            WORKING_DIR, 'tot_pol_nut_prod_rasters',
+            f'tot_pol_{nutrient_id}_prod.tif')
+        tot_pol_nut_yield_task = task_graph.add_task(
+            func=create_tot_pol_nut_yield_1d,
+            args=(
+                crop_nutrient_df, nutrient_name, yield_raster_dir,
+                tot_pol_nut_yield_1d_path),
+            target_path_list=[tot_pol_nut_yield_1d_path],
+            dependent_task_list=[unzip_yield_task],
+            task_name=f'total pol yield {nutrient_name}')
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -571,6 +591,57 @@ def _make_logger_callback(message):
             logger_callback.total_time = 0.0
 
     return logger_callback
+
+
+def create_tot_pol_nut_yield_1d(
+        crop_nutrient_df, nutrient_name, yield_raster_dir,
+        target_production_path):
+    """Create total pollination yield for a nutrient for all crops.
+
+    Parameters:
+        crop_nutrient_df (pandas.DataFrame): dataframe with at least the
+            column `filenm`, `nutrient_name`, `Percent refuse crop`, and
+            `Pollination dependence crop`.
+        nutrient_name (str): nutrient name to use to index into the crop
+            data frame.
+        yield_raster_dir (str): path to a directory that has files of the
+            format `[crop_name]_yield_map.tif` where `crop_name` is a value
+            in the `filenm` column of `crop_nutrient_df`.
+        target_production_path (str): path to target raster that will contain
+            a per-pixel amount of pollinator produced `nutrient_name`
+            calculated as the sum(
+                crop_yield_map * (100-Percent refuse crop) *
+                (Pollination dependence crop) * nutrient) * (ha / pixel map))
+
+    Returns:
+        None.
+    """
+    yield_raster_path_band_list = []
+    pollination_yield_factor_list = []
+    for _, row in crop_nutrient_df.iterrows():
+        yield_raster_path = os.path.join(
+            yield_raster_dir, f"{row['filenm']}_yield_map.tif")
+        if os.path.exists(yield_raster_path):
+            yield_raster_path_band_list.append(
+                (yield_raster_path, 1))
+            pollination_yield_factor_list.append(
+                (1. - row['Percent refuse'] / 100.) *
+                row['Pollination dependence'] *
+                row[nutrient_name])
+        else:
+            raise ValueError(f"not found {yield_raster_path}")
+
+    yield_raster_info = pygeoprocessing.get_raster_info(
+        yield_raster_path_band_list[0][0])
+    ha_area_array = numpy.linspace(
+        yield_raster_info['geotransform'][3],
+        yield_raster_info['geotransform'][3]+
+        yield_raster_info['geotransform'][5]*
+        yield_raster_info['raster_size'][1],
+        yield_raster_info['raster_size'][1])
+    LOGGER.debug(ha_area_array)
+
+
 
 
 if __name__ == '__main__':

@@ -633,13 +633,24 @@ def create_tot_pol_nut_yield_1d(
 
     yield_raster_info = pygeoprocessing.get_raster_info(
         yield_raster_path_band_list[0][0])
-    ha_area_array = numpy.linspace(
+    y_lat_array = numpy.linspace(
         yield_raster_info['geotransform'][3],
-        yield_raster_info['geotransform'][3]+
-        yield_raster_info['geotransform'][5]*
+        yield_raster_info['geotransform'][3] +
+        yield_raster_info['geotransform'][5] *
         yield_raster_info['raster_size'][1],
         yield_raster_info['raster_size'][1])
-    LOGGER.debug(ha_area_array)
+
+    # got this forumula from https://gis.stackexchange.com/a/29743/2397
+    y_ha_column = numpy.abs(
+        (numpy.sin(numpy.radians(y_lat_array)) -
+         numpy.sin(numpy.radians(
+             y_lat_array + yield_raster_info['geotransform'][5]))) *
+        numpy.radians(yield_raster_info['geotransform'][1]) *
+        6371000.0 ** 2) / 10000.0
+
+    y_ha_array = numpy.tile(
+        y_ha_column, (yield_raster_info['raster_size'][0], 1)).transpose()
+    LOGGER.debug(y_ha_array)
 
 
 

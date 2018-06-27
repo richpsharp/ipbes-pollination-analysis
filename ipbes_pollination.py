@@ -72,7 +72,11 @@ def main():
     #  services (Kennedy et al. 2013).
     kernel_raster_path = os.path.join(
         reproduce_env['DATA_DIR'], 'radial_kernel.tif')
-    create_radial_convolution_mask(0.00277778, 2000., kernel_raster_path)
+    kernel_task = task_graph.add_task(
+        func=create_radial_convolution_mask,
+        args=(0.00277778, 2000., kernel_raster_path),
+        target_path_list=[kernel_raster_path],
+        task_name='make convolution kernel')
 
     globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
 
@@ -111,7 +115,8 @@ def main():
             args=(landcover_path, 'mode'),
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
-            task_name=f'compress {os.path.basename(landcover_path)}')
+            task_name=f'compress {os.path.basename(landcover_path)}',
+            priority=-100,)
 
         hab_task_path_list = []
 
@@ -138,7 +143,8 @@ def main():
                 target_path_list=[
                     f'{mask_target_path}.ovr'],
                 dependent_task_list=[mask_task],
-                task_name=f'compress {os.path.basename(mask_target_path)}')
+                task_name=f'compress {os.path.basename(mask_target_path)}',
+                priority=-100,)
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -160,7 +166,7 @@ def main():
                         'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                         'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
                         'NUM_THREADS=ALL_CPUS')},
-                dependent_task_list=[mask_task],
+                dependent_task_list=[mask_task, kernel_task],
                 target_path_list=[proportional_hab_area_2km_path],
                 priority=2,
                 task_name=(
@@ -173,7 +179,8 @@ def main():
                 target_path_list=[
                     f'{proportional_hab_area_2km_path}.ovr'],
                 dependent_task_list=[convolve2d_task],
-                task_name=f'compress {os.path.basename(proportional_hab_area_2km_path)}')
+                task_name=f'compress {os.path.basename(proportional_hab_area_2km_path)}',
+                priority=-100,)
 
             raster_tasks_to_threshold_list.append(
                 (convolve2d_task, proportional_hab_area_2km_path))
@@ -211,7 +218,8 @@ def main():
                 target_path_list=[
                     f'{thresholded_path}.ovr'],
                 dependent_task_list=[threshold_task],
-                task_name=f'compress {os.path.basename(thresholded_path)}')
+                task_name=f'compress {os.path.basename(thresholded_path)}',
+                priority=-100,)
 
 
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION

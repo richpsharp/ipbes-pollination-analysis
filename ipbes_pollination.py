@@ -37,7 +37,7 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = 0
+N_WORKERS = 4
 
 
 def main():
@@ -639,8 +639,6 @@ def create_tot_pol_nut_yield_1d(
         else:
             raise ValueError(f"not found {yield_raster_path}")
 
-    LOGGER.debug(pollination_yield_factor_list)
-    LOGGER.debug(yield_raster_path_band_list)
     yield_raster_info = pygeoprocessing.get_raster_info(
         yield_raster_path_band_list[0][0])
     y_lat_array = numpy.linspace(

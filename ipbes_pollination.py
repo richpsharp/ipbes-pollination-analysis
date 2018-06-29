@@ -37,7 +37,7 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = 4
+N_WORKERS = 0
 
 
 def main():
@@ -45,7 +45,7 @@ def main():
     reproduce_env = reproduce.Reproduce(WORKING_DIR)
     LOGGER.debug(reproduce_env['CACHE_DIR'])
     task_graph = taskgraph.TaskGraph(
-        reproduce_env['CACHE_DIR'], N_WORKERS)
+        reproduce_env['CACHE_DIR'], N_WORKERS, delayed_start=True)
 
     # The following table is used for:
     # Pollinator habitat was defined as any natural land covers, as defined
@@ -108,7 +108,6 @@ def main():
                     google_bucket_fetcher,
                     landcover_url, GOOGLE_BUCKET_KEY_PATH)),
             target_path_list=[landcover_path],
-            priority=0,
             task_name=f'fetch {landcover_key}')
 
         _ = task_graph.add_task(
@@ -116,8 +115,7 @@ def main():
             args=(landcover_path, 'mode'),
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
-            task_name=f'compress {os.path.basename(landcover_path)}',
-            priority=-100,)
+            task_name=f'compress {os.path.basename(landcover_path)}')
 
         hab_task_path_list = []
 
@@ -135,7 +133,6 @@ def main():
                     globio_codes, mask_target_path),
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
-                priority=1,
                 task_name=f'mask {mask_key}',)
 
             _ = task_graph.add_task(
@@ -144,8 +141,7 @@ def main():
                 target_path_list=[
                     f'{mask_target_path}.ovr'],
                 dependent_task_list=[mask_task],
-                task_name=f'compress {os.path.basename(mask_target_path)}',
-                priority=-100,)
+                task_name=f'compress {os.path.basename(mask_target_path)}')
 
             if mask_prefix == 'hab':
                 hab_task_path_list.append(
@@ -281,7 +277,7 @@ def main():
                 google_bucket_fetcher,
                 yield_zip_url, GOOGLE_BUCKET_KEY_PATH)),
         target_path_list=[yield_zip_path],
-        priority=0,
+        priority=100,
         task_name=f'fetch monfreda 2008 zip')
 
     zip_touch_file_path = os.path.join(
@@ -292,7 +288,9 @@ def main():
             yield_zip_path, os.path.dirname(yield_zip_path),
             zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
-        task_name=f'unzip monfreda_2008_observed_yield')
+        dependent_task_list=[yield_zip_fetch_task],
+        task_name=f'unzip monfreda_2008_observed_yield',
+        priority=100)
 
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
@@ -309,7 +307,16 @@ def main():
                 tot_pol_nut_yield_1d_path),
             target_path_list=[tot_pol_nut_yield_1d_path],
             dependent_task_list=[unzip_yield_task],
-            task_name=f'total pol yield {nutrient_name}')
+            task_name=f'total pol yield {nutrient_name}',
+            priority=100)
+
+        _ = task_graph.add_task(
+            func=build_overviews,
+            args=(tot_pol_nut_yield_1d_path, 'average'),
+            target_path_list=[f'{tot_pol_nut_yield_1d_path}.ovr'],
+            dependent_task_list=[tot_pol_nut_yield_task],
+            task_name=(
+                f'compress {os.path.basename(tot_pol_nut_yield_1d_path)}'))
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -457,7 +464,6 @@ def threshold_raster(base_path, threshold_val, target_path):
         None.
 
     """
-
     base_nodata = pygeoprocessing.get_raster_info(base_path)['nodata'][0]
     target_nodata = 2
     pygeoprocessing.raster_calculator(
@@ -633,6 +639,8 @@ def create_tot_pol_nut_yield_1d(
         else:
             raise ValueError(f"not found {yield_raster_path}")
 
+    LOGGER.debug(pollination_yield_factor_list)
+    LOGGER.debug(yield_raster_path_band_list)
     yield_raster_info = pygeoprocessing.get_raster_info(
         yield_raster_path_band_list[0][0])
     y_lat_array = numpy.linspace(
@@ -642,37 +650,65 @@ def create_tot_pol_nut_yield_1d(
         yield_raster_info['raster_size'][1],
         yield_raster_info['raster_size'][1])
 
-    # got this forumula from https://gis.stackexchange.com/a/29743/2397
-    # create an array that is the size of a pixel in hectares for a given
-    # latitude pixel
-    y_ha_array = numpy.abs(
-        (numpy.sin(numpy.radians(y_lat_array)) -
-         numpy.sin(numpy.radians(
-             y_lat_array + yield_raster_info['geotransform'][5]))) *
-        numpy.radians(yield_raster_info['geotransform'][1]) *
-        6371000.0 ** 2) / 10000.0
+    y_ha_array = area_of_pixel(
+        abs(yield_raster_info['geotransform'][1]),
+        y_lat_array) / 10000.0
     y_ha_column = y_ha_array.reshape((y_ha_array.size, 1))
 
-    nodata = -1
-    yield_nodata = yield_raster_info[0]['nodata'][0]
+    yield_nodata = yield_raster_info['nodata'][0]
 
     def production_op(pixel_ha, *crop_yield_array_list):
         """Calculate total nutrient production."""
         result = numpy.empty_like(crop_yield_array_list[0])
         result[:] = 0.0
-        all_valid = numpy.zeroes(result.shape, dtype=numpy.bool)
+        all_valid = numpy.zeros(result.shape, dtype=numpy.bool)
+
+        # expand the pixel_ha column to an array big enough for all the
+        # crop yield arrays
+        pixel_ha_array = numpy.tile(
+            pixel_ha, crop_yield_array_list[0].shape[1])
         for crop_index, crop_array in enumerate(crop_yield_array_list):
             valid_mask = crop_array != yield_nodata
             all_valid |= valid_mask
             result[valid_mask] += (
-                crop_array[valid_mask] * pixel_ha[valid_mask] *
+                crop_array[valid_mask] * pixel_ha_array[valid_mask] *
                 pollination_yield_factor_list[crop_index])
-        result[~all_valid] = nodata
+        result[~all_valid] = yield_nodata
         return result
 
     pygeoprocessing.raster_calculator(
         [y_ha_column] + yield_raster_path_band_list, production_op,
-        target_production_path, gdal.GDT_Float32, -1)
+        target_production_path, gdal.GDT_Float32, yield_nodata)
+
+
+def area_of_pixel(pixel_size, center_lat):
+    """Calculate m^2 area of a wgs84 square pixel.
+
+    Adapted from: https://gis.stackexchange.com/a/127327/2397
+
+    Parameters:
+        pixel_size (float): length of side of pixel in degrees.
+        center_lat (float): latitude of the center of the pixel. Note this
+            value +/- half the `pixel-size` must not exceed 90/-90 degrees
+            latitude or an invalid area will be calculated.
+
+    Returns:
+        Area of square pixel of side length `pixel_size` centered at
+        `center_lat` in m^2.
+
+    """
+    a = 6378137  # meters
+    b = 6356752.3142  # meters
+    e = numpy.sqrt(1-(b/a)**2)
+    area_list = []
+    for f in [center_lat+pixel_size/2, center_lat-pixel_size/2]:
+        zm = 1 - e*numpy.sin(numpy.radians(f))
+        zp = 1 + e*numpy.sin(numpy.radians(f))
+        area_list.append(
+            numpy.pi * b**2 * (
+                numpy.log(zp/zm) / (2*e) +
+                numpy.sin(numpy.radians(f)) / (zp*zm)))
+    return pixel_size / 360. * (area_list[0]-area_list[1])
 
 
 if __name__ == '__main__':

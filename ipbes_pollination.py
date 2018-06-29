@@ -2,6 +2,7 @@
 Pollination analysis for IPBES.
 
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
+    https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
 import zipfile
 import time
@@ -615,6 +616,7 @@ def create_tot_pol_nut_yield_1d(
 
     Returns:
         None.
+
     """
     yield_raster_path_band_list = []
     pollination_yield_factor_list = []
@@ -641,23 +643,36 @@ def create_tot_pol_nut_yield_1d(
         yield_raster_info['raster_size'][1])
 
     # got this forumula from https://gis.stackexchange.com/a/29743/2397
-    y_ha_column = numpy.abs(
+    # create an array that is the size of a pixel in hectares for a given
+    # latitude pixel
+    y_ha_array = numpy.abs(
         (numpy.sin(numpy.radians(y_lat_array)) -
          numpy.sin(numpy.radians(
              y_lat_array + yield_raster_info['geotransform'][5]))) *
         numpy.radians(yield_raster_info['geotransform'][1]) *
         6371000.0 ** 2) / 10000.0
+    y_ha_column = y_ha_array.reshape((y_ha_array.size, 1))
 
-    y_ha_array = numpy.tile(
-        y_ha_column, (yield_raster_info['raster_size'][0], 1)).transpose()
+    nodata = -1
+    yield_nodata = yield_raster_info[0]['nodata'][0]
 
-    def yield_op(*x):
-        pass
+    def production_op(pixel_ha, *crop_yield_array_list):
+        """Calculate total nutrient production."""
+        result = numpy.empty_like(crop_yield_array_list[0])
+        result[:] = 0.0
+        all_valid = numpy.zeroes(result.shape, dtype=numpy.bool)
+        for crop_index, crop_array in enumerate(crop_yield_array_list):
+            valid_mask = crop_array != yield_nodata
+            all_valid |= valid_mask
+            result[valid_mask] += (
+                crop_array[valid_mask] * pixel_ha[valid_mask] *
+                pollination_yield_factor_list[crop_index])
+        result[~all_valid] = nodata
+        return result
 
     pygeoprocessing.raster_calculator(
-        yield_raster_path_band_list, yield_op, target_production_path,
-        gdal.GDT_Float32, -1)
-
+        [y_ha_column] + yield_raster_path_band_list, production_op,
+        target_production_path, gdal.GDT_Float32, -1)
 
 
 if __name__ == '__main__':

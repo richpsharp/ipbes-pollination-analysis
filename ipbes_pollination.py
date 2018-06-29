@@ -165,7 +165,6 @@ def main():
                         'NUM_THREADS=ALL_CPUS')},
                 dependent_task_list=[mask_task, kernel_task],
                 target_path_list=[proportional_hab_area_2km_path],
-                priority=2,
                 task_name=(
                     'calculate proportional'
                     f' {os.path.basename(proportional_hab_area_2km_path)}'))
@@ -177,7 +176,7 @@ def main():
                     f'{proportional_hab_area_2km_path}.ovr'],
                 dependent_task_list=[convolve2d_task],
                 task_name=f'compress {os.path.basename(proportional_hab_area_2km_path)}',
-                priority=-100,)
+                )
 
             raster_tasks_to_threshold_list.append(
                 (convolve2d_task, proportional_hab_area_2km_path))
@@ -206,7 +205,6 @@ def main():
                     thresholded_path),
                 target_path_list=[thresholded_path],
                 dependent_task_list=[convolve2d_task],
-                priority=3,
                 task_name=f'threshold {os.path.basename(thresholded_path)}')
 
             _ = task_graph.add_task(
@@ -216,7 +214,7 @@ def main():
                     f'{thresholded_path}.ovr'],
                 dependent_task_list=[threshold_task],
                 task_name=f'compress {os.path.basename(thresholded_path)}',
-                priority=-100,)
+                )
 
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
     # Pollination-dependence of crops, crop yields, and crop micronutrient

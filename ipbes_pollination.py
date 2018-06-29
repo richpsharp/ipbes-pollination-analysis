@@ -147,8 +147,6 @@ def main():
                 hab_task_path_list.append(
                     (mask_task, mask_target_path))
 
-        # TODO: commenting out pollination threshold while I develop total production
-        """
         raster_tasks_to_threshold_list = []
         for mask_task, mask_path, in hab_task_path_list:
             proportional_hab_area_2km_path = os.path.join(
@@ -219,7 +217,6 @@ def main():
                 dependent_task_list=[threshold_task],
                 task_name=f'compress {os.path.basename(thresholded_path)}',
                 priority=-100,)
-        """
 
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
     # Pollination-dependence of crops, crop yields, and crop micronutrient

@@ -650,8 +650,13 @@ def create_tot_pol_nut_yield_1d(
 
     y_ha_array = numpy.tile(
         y_ha_column, (yield_raster_info['raster_size'][0], 1)).transpose()
-    LOGGER.debug(y_ha_array)
 
+    def yield_op(*x):
+        pass
+
+    pygeoprocessing.raster_calculator(
+        yield_raster_path_band_list, yield_op, target_production_path,
+        gdal.GDT_Float32, -1)
 
 
 

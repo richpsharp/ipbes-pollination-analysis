@@ -37,8 +37,7 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = 4
-
+N_WORKERS = 2
 
 def main():
     """Entry point."""
@@ -564,7 +563,8 @@ def build_overviews(local_path, resample_method):
     gdal.SetConfigOption('COMPRESS_OVERVIEW', 'LZW')
     raster_copy.BuildOverviews(
         resample_method, overview_levels, callback=_make_logger_callback(
-            f'{local_path} %.2f%% complete'))
+            f'build overview for {os.path.basename(local_path)} '
+            '%.2f%% complete'))
 
 
 def _make_logger_callback(message):
@@ -656,15 +656,11 @@ def create_tot_pol_nut_yield_1d(
         result[:] = 0.0
         all_valid = numpy.zeros(result.shape, dtype=numpy.bool)
 
-        # expand the pixel_ha column to an array big enough for all the
-        # crop yield arrays
-        pixel_ha_array = numpy.tile(
-            pixel_ha, crop_yield_array_list[0].shape[1])
         for crop_index, crop_array in enumerate(crop_yield_array_list):
             valid_mask = crop_array != yield_nodata
             all_valid |= valid_mask
             result[valid_mask] += (
-                crop_array[valid_mask] * pixel_ha_array[valid_mask] *
+                crop_array[valid_mask] * pixel_ha[valid_mask] *
                 pollination_yield_factor_list[crop_index])
         result[~all_valid] = yield_nodata
         return result

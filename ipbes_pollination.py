@@ -291,26 +291,31 @@ def main():
 
     for nutrient_id, nutrient_name in [
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
-        tot_pol_nut_yield_1d_path = os.path.join(
-            WORKING_DIR, 'tot_pol_nut_prod_rasters',
-            f'tot_pol_{nutrient_id}_prod.tif')
-        tot_pol_nut_yield_task = task_graph.add_task(
-            func=create_tot_pol_nut_yield_1d,
+        tot_prod_nut_1d_path = os.path.join(
+            WORKING_DIR, 'tot_prod_nut_prod_rasters',
+            f'tot_prod_{nutrient_id}_1d.tif')
+        tot_prod_nutrient_task = task_graph.add_task(
+            func=create_prod_nutrient_1d_raster,
             args=(
-                crop_nutrient_df, nutrient_name, yield_raster_dir,
-                tot_pol_nut_yield_1d_path),
-            target_path_list=[tot_pol_nut_yield_1d_path],
+                crop_nutrient_df, nutrient_name, yield_raster_dir, False,
+                tot_prod_nut_1d_path),
+            target_path_list=[tot_prod_nut_1d_path],
             dependent_task_list=[unzip_yield_task],
             task_name=f'total pol yield {nutrient_name}',
             priority=100)
 
-        _ = task_graph.add_task(
-            func=build_overviews,
-            args=(tot_pol_nut_yield_1d_path, 'average'),
-            target_path_list=[f'{tot_pol_nut_yield_1d_path}.ovr'],
-            dependent_task_list=[tot_pol_nut_yield_task],
-            task_name=(
-                f'compress {os.path.basename(tot_pol_nut_yield_1d_path)}'))
+        poll_serv_nutrient_1d_path = os.path.join(
+            WORKING_DIR, 'poll_serv_nutrient_rasters',
+            f'poll_serv_{nutrient_id}_1d.tif')
+        poll_serv_nutrient_task = task_graph.add_task(
+            func=create_prod_nutrient_1d_raster,
+            args=(
+                crop_nutrient_df, nutrient_name, yield_raster_dir, True,
+                poll_serv_nutrient_1d_path),
+            target_path_list=[poll_serv_nutrient_1d_path],
+            dependent_task_list=[unzip_yield_task],
+            task_name=f'total pol yield {nutrient_name}',
+            priority=100)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -595,10 +600,10 @@ def _make_logger_callback(message):
     return logger_callback
 
 
-def create_tot_pol_nut_yield_1d(
+def create_prod_nutrient_1d_raster(
         crop_nutrient_df, nutrient_name, yield_raster_dir,
-        target_production_path):
-    """Create total pollination yield for a nutrient for all crops.
+        consider_pollination, target_production_path):
+    """Create total yield for a nutrient for all crops.
 
     Parameters:
         crop_nutrient_df (pandas.DataFrame): dataframe with at least the
@@ -609,6 +614,8 @@ def create_tot_pol_nut_yield_1d(
         yield_raster_dir (str): path to a directory that has files of the
             format `[crop_name]_yield_map.tif` where `crop_name` is a value
             in the `filenm` column of `crop_nutrient_df`.
+        consider_pollination (bool): if True, multiply yields by pollinator
+            dependence ratio.
         target_production_path (str): path to target raster that will contain
             a per-pixel amount of pollinator produced `nutrient_name`
             calculated as the sum(
@@ -628,9 +635,10 @@ def create_tot_pol_nut_yield_1d(
             yield_raster_path_band_list.append(
                 (yield_raster_path, 1))
             pollination_yield_factor_list.append(
-                (1. - row['Percent refuse'] / 100.) *
-                row['Pollination dependence'] *
-                row[nutrient_name])
+                (1. - row['Percent refuse'] / 100.) * row[nutrient_name])
+            if consider_pollination:
+                pollination_yield_factor_list[-1] *= (
+                    row['Pollination dependence'])
         else:
             raise ValueError(f"not found {yield_raster_path}")
 

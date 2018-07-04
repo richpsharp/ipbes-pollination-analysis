@@ -4,6 +4,7 @@ Pollination analysis for IPBES.
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
     https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
+import sys
 import zipfile
 import time
 import os
@@ -26,7 +27,8 @@ logging.basicConfig(
     level=logging.DEBUG,
     format=(
         '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
-        ' [%(pathname)s.%(funcName)s:%(lineno)d] %(message)s'))
+        ' [%(pathname)s.%(funcName)s:%(lineno)d] %(message)s'),
+    stream=sys.stdout)
 LOGGER = logging.getLogger('ipbes_pollination')
 
 # the following are the globio landcover codes. A tuple (x, y) indicates the

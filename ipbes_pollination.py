@@ -114,6 +114,8 @@ def main():
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
             task_name=f'compress {os.path.basename(landcover_path)}')
+        break
+    """
 
         hab_task_path_list = []
 
@@ -338,6 +340,7 @@ def main():
     # nutrient production for each nutrient in each scenario can be found at
     # (permanent link to output), outputs "poll_serv_..." below.
 
+    """
     task_graph.close()
     task_graph.join()
 

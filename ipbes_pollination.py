@@ -4,6 +4,7 @@ Pollination analysis for IPBES.
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
     https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
+import sys
 import zipfile
 import time
 import os
@@ -26,7 +27,8 @@ logging.basicConfig(
     level=logging.DEBUG,
     format=(
         '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
-        ' [%(pathname)s.%(funcName)s:%(lineno)d] %(message)s'))
+        ' [%(pathname)s.%(funcName)s:%(lineno)d] %(message)s'),
+    stream=sys.stdout)
 LOGGER = logging.getLogger('ipbes_pollination')
 
 # the following are the globio landcover codes. A tuple (x, y) indicates the
@@ -37,14 +39,16 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = 2
+N_WORKERS = 4
+
 
 def main():
     """Entry point."""
     reproduce_env = reproduce.Reproduce(WORKING_DIR)
     LOGGER.debug(reproduce_env['CACHE_DIR'])
     task_graph = taskgraph.TaskGraph(
-        reproduce_env['CACHE_DIR'], N_WORKERS, delayed_start=True)
+        reproduce_env['CACHE_DIR'], N_WORKERS, delayed_start=True,
+        reporting_interval=5.0)
 
     # The following table is used for:
     # Pollinator habitat was defined as any natural land covers, as defined
@@ -55,15 +59,19 @@ def main():
     #  addition to "natural", and repeated all analyses with semi-natural
     #  plus natural habitats, but this did not substantially alter the results
     #  so we do not include it in our final analysis or code base.
-    reproduce_env.register_data(
-        'globio_class_table',
-        'pollination_data/GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv',
-        expected_hash='embedded',
-        constructor_func=functools.partial(
-            google_bucket_fetcher,
-            'https://storage.cloud.google.com/ecoshard-root/'
-            'GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv',
-            GOOGLE_BUCKET_KEY_PATH))
+    globio_class_table_url = (
+        'https://storage.cloud.google.com/ecoshard-root/'
+        'GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv')
+    globio_table_path = os.path.join(
+        reproduce_env['DATA_DIR'], 'pollination_data',
+        os.path.basename(globio_class_table_url))
+    globio_class_table_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            globio_class_table_url, GOOGLE_BUCKET_KEY_PATH,
+            globio_table_path),
+        target_path_list=[globio_table_path],
+        task_name=f'fetch {os.path.basename(globio_class_table_url)}')
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
@@ -77,8 +85,6 @@ def main():
         args=(0.00277778, 2000., kernel_raster_path),
         target_path_list=[kernel_raster_path],
         task_name='make convolution kernel')
-
-    globio_df = pandas.read_csv(reproduce_env['globio_class_table'])
 
     landcover_data = {
         'GLOBIO4_LU_10sec_2050_SSP5_RCP85': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP5_RCP85_md5_1b3cc1ce6d0ff14d66da676ef194f130.tif",
@@ -97,15 +103,8 @@ def main():
         landcover_env_path = f'landcover/{os.path.basename(landcover_url)}'
         landcover_path = reproduce_env.predict_path(landcover_env_path)
         landcover_fetch_task = task_graph.add_task(
-            func=register_data,
-            args=(
-                reproduce_env,
-                landcover_key,
-                landcover_env_path,
-                'embedded',
-                functools.partial(
-                    google_bucket_fetcher,
-                    landcover_url, GOOGLE_BUCKET_KEY_PATH)),
+            func=google_bucket_fetch_and_validate,
+            args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
             target_path_list=[landcover_path],
             task_name=f'fetch {landcover_key}')
 
@@ -235,16 +234,20 @@ def main():
     #   nutrient at 5 arc min. The full table used in this analysis can be
     # found at https://storage.googleapis.com/ecoshard-root/'
     # 'crop_nutrient_md5_d6e67fd79ef95ab2dd44ca3432e9bb4d.csv
-    reproduce_env.register_data(
-        'crop_nutrient_table',
-        'pollination_data/crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
-        expected_hash='embedded',
-        constructor_func=functools.partial(
-            google_bucket_fetcher,
-            'https://storage.googleapis.com/ecoshard-root/'
-            'crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv',
-            GOOGLE_BUCKET_KEY_PATH))
-    crop_nutrient_df = pandas.read_csv(reproduce_env['crop_nutrient_table'])
+    crop_nutrient_url = (
+        'https://storage.googleapis.com/ecoshard-root/'
+        'crop_nutrient_md5_2fbe7455357f8008a12827fd88816fc1.csv')
+    crop_nutrient_table_path = os.path.join(
+        reproduce_env['DATA_DIR'], 'pollination_data',
+        os.path.basename(crop_nutrient_url))
+
+    crop_nutrient_table_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            crop_nutrient_url, GOOGLE_BUCKET_KEY_PATH,
+            crop_nutrient_table_path),
+        target_path_list=[crop_nutrient_table_path],
+        task_name=f'fetch {os.path.basename(crop_nutrient_table_path)}')
 
     # 1.2.3.  Crop production
     # Spatially-explicit global crop yields (tons/ha) at 5 arc min (~10 km) were
@@ -253,26 +256,21 @@ def main():
     # to calculate the pollination-dependent crop yield for each 5 min grid
     # cell.
     # Note the monfredia maps are in units of per-hectare yields
-    local_yield_zip_path = (
-        'observed_yields/'
-        'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
     yield_zip_url = (
         'https://storage.cloud.google.com/ecoshard-root/ipbes/'
         'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
-    yield_zip_path = reproduce_env.predict_path(local_yield_zip_path)
+    yield_zip_path = os.path.join(
+        reproduce_env['DATA_DIR'], 'observed_yields',
+        os.path.basename(yield_zip_url))
+
     yield_zip_fetch_task = task_graph.add_task(
-        func=register_data,
+        func=google_bucket_fetch_and_validate,
         args=(
-            reproduce_env,
-            'monfreda_2008_observed_yield',
-            local_yield_zip_path,
-            'embedded',
-            functools.partial(
-                google_bucket_fetcher,
-                yield_zip_url, GOOGLE_BUCKET_KEY_PATH)),
+            yield_zip_url, GOOGLE_BUCKET_KEY_PATH,
+            yield_zip_path),
         target_path_list=[yield_zip_path],
         priority=100,
-        task_name=f'fetch monfreda 2008 zip')
+        task_name=f'fetch {os.path.basename(yield_zip_path)}')
 
     zip_touch_file_path = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield.txt')
@@ -297,10 +295,11 @@ def main():
         tot_prod_nutrient_task = task_graph.add_task(
             func=create_prod_nutrient_1d_raster,
             args=(
-                crop_nutrient_df, nutrient_name, yield_raster_dir, False,
-                tot_prod_nut_1d_path),
-            target_path_list=[tot_prod_nut_1d_path],
-            dependent_task_list=[unzip_yield_task],
+                crop_nutrient_table_path, nutrient_name, yield_raster_dir,
+                tot_pol_nut_yield_1d_path),
+            target_path_list=[tot_pol_nut_yield_1d_path],
+            dependent_task_list=[
+                unzip_yield_task, crop_nutrient_table_fetch_task],
             task_name=f'total pol yield {nutrient_name}',
             priority=100)
 
@@ -333,7 +332,7 @@ def main():
     # pollinated. Whether that dependent yield is actually produced is
     # determined by whether there is sufficient natural habitat around the
     # agricultural pixel in question to provide wild pollinators and hence
-    #adequate pollination to crops.  These pollinator-derived nutrient yields
+    # adequate pollination to crops.  These pollinator-derived nutrient yields
     # were then multiplied by the area of the pixel to convert yields to
     # pixel-level production for each nutrient.  Maps of pollination-derived
     # nutrient production for each nutrient in each scenario can be found at
@@ -395,7 +394,7 @@ def create_radial_convolution_mask(
     kernel_band.WriteArray(normalized_kernel_array)
 
 
-def google_bucket_fetcher(url, json_key_path, target_path):
+def google_bucket_fetch_and_validate(url, json_key_path, target_path):
     """Create a function to download a Google Blob to a given path.
 
     Parameters:
@@ -422,7 +421,13 @@ def google_bucket_fetcher(url, json_key_path, target_path):
     LOGGER.debug(f'loading blob {blob_id} from {url}')
     blob = google.cloud.storage.Blob(blob_id, bucket)
     LOGGER.info(f'downloading blob {target_path} from {url}')
+    try:
+        os.makedirs(os.path.dirname(target_path))
+    except os.error:
+        pass
     blob.download_to_filename(target_path)
+    if not reproduce.valid_hash(target_path, 'embedded'):
+        raise ValueError(f"{target_path}' does not match its expected hash")
 
 
 class MaskCodes(object):
@@ -505,16 +510,6 @@ def mask_raster(base_path, codes, target_path):
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
             'NUM_THREADS=ALL_CPUS'))
-
-
-def register_data(
-        reproduce_env, data_key, local_path, expected_hash, constructor_func):
-    """Wrap a call to `reproduce_env.register_data` for pickling."""
-    reproduce_env.register_data(
-        data_key,
-        local_path,
-        expected_hash=expected_hash,
-        constructor_func=constructor_func)
 
 
 def unzip_file(zipfile_path, target_dir, touchfile_path):
@@ -600,13 +595,13 @@ def _make_logger_callback(message):
     return logger_callback
 
 
-def create_prod_nutrient_1d_raster(
-        crop_nutrient_df, nutrient_name, yield_raster_dir,
-        consider_pollination, target_production_path):
-    """Create total yield for a nutrient for all crops.
+def create_tot_pol_nut_yield_1d(
+        crop_nutrient_df_path, nutrient_name, yield_raster_dir,
+        target_production_path):
+    """Create total pollination yield for a nutrient for all crops.
 
     Parameters:
-        crop_nutrient_df (pandas.DataFrame): dataframe with at least the
+        crop_nutrient_df_path (str): path to CSV with at least the
             column `filenm`, `nutrient_name`, `Percent refuse crop`, and
             `Pollination dependence crop`.
         nutrient_name (str): nutrient name to use to index into the crop
@@ -626,6 +621,7 @@ def create_prod_nutrient_1d_raster(
         None.
 
     """
+    crop_nutrient_df = pandas.read_csv(crop_nutrient_df_path)
     yield_raster_path_band_list = []
     pollination_yield_factor_list = []
     for _, row in crop_nutrient_df.iterrows():

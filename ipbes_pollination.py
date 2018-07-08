@@ -10,7 +10,6 @@ import time
 import os
 import re
 import logging
-import functools
 
 import google.cloud.client
 import google.cloud.storage
@@ -114,8 +113,6 @@ def main():
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
             task_name=f'compress {os.path.basename(landcover_path)}')
-        break
-    """
 
         hab_task_path_list = []
 
@@ -294,15 +291,16 @@ def main():
         tot_prod_nut_1d_path = os.path.join(
             WORKING_DIR, 'tot_prod_nut_prod_rasters',
             f'tot_prod_{nutrient_id}_1d.tif')
+
         tot_prod_nutrient_task = task_graph.add_task(
             func=create_prod_nutrient_1d_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
-                tot_pol_nut_yield_1d_path),
-            target_path_list=[tot_pol_nut_yield_1d_path],
+                False, tot_prod_nut_1d_path),
+            target_path_list=[tot_prod_nut_1d_path],
             dependent_task_list=[
                 unzip_yield_task, crop_nutrient_table_fetch_task],
-            task_name=f'total pol yield {nutrient_name}',
+            task_name=f'total nut prod {nutrient_name}',
             priority=100)
 
         poll_serv_nutrient_1d_path = os.path.join(
@@ -311,11 +309,11 @@ def main():
         poll_serv_nutrient_task = task_graph.add_task(
             func=create_prod_nutrient_1d_raster,
             args=(
-                crop_nutrient_df, nutrient_name, yield_raster_dir, True,
-                poll_serv_nutrient_1d_path),
+                crop_nutrient_table_path, nutrient_name, yield_raster_dir,
+                True, poll_serv_nutrient_1d_path),
             target_path_list=[poll_serv_nutrient_1d_path],
             dependent_task_list=[unzip_yield_task],
-            task_name=f'total pol yield {nutrient_name}',
+            task_name=f'total pol serv {nutrient_name}',
             priority=100)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
@@ -340,7 +338,6 @@ def main():
     # nutrient production for each nutrient in each scenario can be found at
     # (permanent link to output), outputs "poll_serv_..." below.
 
-    """
     task_graph.close()
     task_graph.join()
 
@@ -598,10 +595,10 @@ def _make_logger_callback(message):
     return logger_callback
 
 
-def create_tot_pol_nut_yield_1d(
+def create_prod_nutrient_1d_raster(
         crop_nutrient_df_path, nutrient_name, yield_raster_dir,
-        target_production_path):
-    """Create total pollination yield for a nutrient for all crops.
+        consider_pollination, target_production_path):
+    """Create total production yield for a nutrient for all crops.
 
     Parameters:
         crop_nutrient_df_path (str): path to CSV with at least the

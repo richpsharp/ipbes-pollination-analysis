@@ -546,6 +546,11 @@ def main():
     # nutrient production for each nutrient in each scenario can be found at
     # (permanent link to output), outputs "poll_serv_..." below.
 
+    spatial_population_scenarios_url = (
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/'
+        'Spatial_population_scenarios_GeoTIFF_'
+        'md5_1c4b6d87cb9a167585e1fc49914248fd.zip')
+
     task_graph.close()
     task_graph.join()
 

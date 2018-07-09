@@ -132,15 +132,15 @@ def main():
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
 
-    cont_prod_task_path_list = []
-
+    nut_task_path_tot_prod_map = {}
+    nut_task_path_poll_dep_prod_map = {}
     for nutrient_id, nutrient_name in [
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
+        # total annual production of nutrient
         tot_prod_nut_1d_path = os.path.join(
-            WORKING_DIR, 'tot_prod_nut_prod_rasters',
+            WORKING_DIR, 'total_nutrient_rasters',
             f'tot_prod_{nutrient_id}_1d.tif')
-
-        tot_prod_nutrient_1d_task = task_graph.add_task(
+        tot_prod_nut_1d_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
@@ -149,44 +149,23 @@ def main():
             dependent_task_list=[
                 unzip_yield_task, crop_nutrient_table_fetch_task],
             task_name=f'total nut prod {nutrient_name}')
+        nut_task_path_tot_prod_map[nutrient_id] = (
+            tot_prod_nut_1d_task, tot_prod_nut_1d_path)
 
-        poll_serv_nutrient_1d_path = os.path.join(
-            WORKING_DIR, 'poll_serv_nutrient_rasters',
-            f'poll_serv_{nutrient_id}_1d.tif')
-        poll_serv_nutrient_1d_task = task_graph.add_task(
+        # pollination-dependent annual production of nutrient
+        poll_dep_prod_nut_1d_path = os.path.join(
+            WORKING_DIR, 'total_poll_dependent_production',
+            f'poll_dep_prod_{nutrient_id}_1d.tif')
+        poll_dep_prod_nut_1d_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
-                True, poll_serv_nutrient_1d_path),
-            target_path_list=[poll_serv_nutrient_1d_path],
+                True, poll_dep_prod_nut_1d_path),
+            target_path_list=[poll_dep_prod_nut_1d_path],
             dependent_task_list=[unzip_yield_task],
             task_name=f'total pol serv {nutrient_name}')
-
-        cont_prod_nutrient_1d_path = os.path.join(
-            WORKING_DIR, 'cont_prod_nutrient_rasters',
-            f'cont_prod_{nutrient_id}_1d.tif')
-        cont_prod_nutrient_task = task_graph.add_task(
-            func=create_cont_prod_nutrient_raster,
-            args=(
-                poll_serv_nutrient_1d_path,
-                tot_prod_nut_1d_path,
-                cont_prod_nutrient_1d_path),
-            target_path_list=[cont_prod_nutrient_1d_path],
-            dependent_task_list=[
-                poll_serv_nutrient_1d_task, tot_prod_nutrient_1d_task],
-            task_name=f'cont prod {nutrient_name}')
-
-        cont_prod_task_path_list.append(
-            (cont_prod_nutrient_task, cont_prod_nutrient_1d_path))
-
-    cont_prod_avg_1d_path = os.path.join(WORKING_DIR, 'cont_prod_avg_1d.tif')
-    cont_prod_avg_1d_task = task_graph.add_task(
-        func=create_avg_raster,
-        args=([x[1] for x in cont_prod_task_path_list],
-              cont_prod_avg_1d_path),
-        target_path_list=[cont_prod_avg_1d_path],
-        dependent_task_list=[x[0] for x in cont_prod_task_path_list],
-        task_name='cont_prod_avg')
+        nut_task_path_poll_dep_prod_map[nutrient_id] = (
+            poll_dep_prod_nut_1d_path, poll_dep_prod_nut_1d_task)
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
@@ -259,8 +238,6 @@ def main():
             dependent_task_list=[landcover_fetch_task],
             task_name=f'compress {os.path.basename(landcover_path)}')
 
-        hab_task_path_list = []
-
         for mask_prefix, globio_codes in [
                 ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
             mask_key = f'{landcover_key}_{mask_prefix}_mask'
@@ -287,104 +264,177 @@ def main():
                 task_name=f'compress {os.path.basename(mask_target_path)}')
 
             if mask_prefix == 'hab':
-                hab_task_path_list.append(
-                    (mask_task, mask_target_path))
+                hab_task_path_tuple = (mask_task, mask_target_path)
+            elif mask_prefix == 'ag':
+                ag_task_path_tuple = (mask_task, mask_target_path)
 
-        raster_tasks_to_threshold_list = []
-        for mask_task, mask_path, in hab_task_path_list:
-            proportional_hab_area_2km_path = os.path.join(
-                reproduce_env['DATA_DIR'], 'proportional_area',
-                f'{landcover_key}_hab_prop_area_2km.tif')
-            convolve2d_task = task_graph.add_task(
-                func=pygeoprocessing.convolve_2d,
-                args=[
-                    (mask_path, 1), (kernel_raster_path, 1),
-                    proportional_hab_area_2km_path],
-                kwargs={
-                    'working_dir': reproduce_env['CACHE_DIR'],
-                    'gtiff_creation_options': (
-                        'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
-                        'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
-                        'NUM_THREADS=ALL_CPUS')},
-                dependent_task_list=[mask_task, kernel_task],
-                target_path_list=[proportional_hab_area_2km_path],
-                task_name=(
-                    'calculate proportional'
-                    f' {os.path.basename(proportional_hab_area_2km_path)}'))
+        proportional_hab_area_2km_path = os.path.join(
+            reproduce_env['DATA_DIR'], 'proportional_area',
+            f'{landcover_key}_hab_prop_area_2km.tif')
+        prop_hab_area_2km_task = task_graph.add_task(
+            func=pygeoprocessing.convolve_2d,
+            args=[
+                (hab_task_path_tuple[1], 1), (kernel_raster_path, 1),
+                proportional_hab_area_2km_path],
+            kwargs={
+                'working_dir': reproduce_env['CACHE_DIR'],
+                'gtiff_creation_options': (
+                    'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
+                    'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+                    'NUM_THREADS=ALL_CPUS')},
+            dependent_task_list=[hab_task_path_tuple[0], kernel_task],
+            target_path_list=[proportional_hab_area_2km_path],
+            task_name=(
+                'calculate proportional'
+                f' {os.path.basename(proportional_hab_area_2km_path)}'))
 
-            _ = task_graph.add_task(
-                func=build_overviews,
-                priority=100,
-                args=(proportional_hab_area_2km_path, 'average'),
-                target_path_list=[
-                    f'{proportional_hab_area_2km_path}.ovr'],
-                dependent_task_list=[convolve2d_task],
-                task_name=(
-                    'compress '
-                    f'{os.path.basename(proportional_hab_area_2km_path)}',
-                ))
-
-            raster_tasks_to_threshold_list.append(
-                (convolve2d_task, proportional_hab_area_2km_path))
+        _ = task_graph.add_task(
+            func=build_overviews,
+            priority=100,
+            args=(proportional_hab_area_2km_path, 'average'),
+            target_path_list=[
+                f'{proportional_hab_area_2km_path}.ovr'],
+            dependent_task_list=[prop_hab_area_2km_task],
+            task_name=(
+                'compress '
+                f'{os.path.basename(proportional_hab_area_2km_path)}',
+            ))
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
         #  evaluate whether there was sufficient pollinator habitat in the 2
-        #  km around farmland to provide pollination services, based on Kremen
-        #  et al.'s (2005)  estimate of the area requirements for achieving
-        #  full pollination. This produced a map of wild pollination
-        #  sufficiency where every agricultural pixel was designated in a
-        #  binary fashion: 0 if proportional area of habitat was less than
-        #  0.3; 1 if greater than 0.3. Maps of pollination sufficiency can be
-        #  found at (permanent link to output), outputs "poll_suff_..." below.
+        #  km around farmland to provide pollination services, based on
+        #  Kremen et al.'s (2005)  estimate of the area requirements for
+        #  achieving full pollination. This produced a map of wild
+        #  pollination sufficiency where every agricultural pixel was
+        #  designated in a binary fashion: 0 if proportional area of habitat
+        #  was less than 0.3; 1 if greater than 0.3. Maps of pollination
+        #  sufficiency can be found at (permanent link to output), outputs
+        #  "poll_suff_..." below.
 
         threshold_val = 0.3
-        for convolve2d_task, proportional_hab_area_2km_path in (
-                raster_tasks_to_threshold_list):
-            poll_suff_path = os.path.join(
+        poll_suff_path = os.path.join(
+            WORKING_DIR, 'main_outputs',
+            f'poll_suff_{landcover_short_suffix}.tif')
+        poll_suff_task = task_graph.add_task(
+            func=threshold_select_raster,
+            args=(
+                proportional_hab_area_2km_path,
+                ag_task_path_tuple[1], threshold_val,
+                poll_suff_path),
+            target_path_list=[poll_suff_path],
+            dependent_task_list=[
+                prop_hab_area_2km_task, ag_task_path_tuple[0]],
+            task_name=f'threshold {os.path.basename(poll_suff_path)}')
+
+        _ = task_graph.add_task(
+            func=build_overviews,
+            priority=100,
+            args=(poll_suff_path, 'mode'),
+            target_path_list=[
+                f'{poll_suff_path}.ovr'],
+            dependent_task_list=[poll_suff_task],
+            task_name=f'compress {os.path.basename(poll_suff_path)}',
+            )
+
+        # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+        # total annual production of energy (KJ/yr), vitamin A (IU/yr),
+        # and folate (mg/yr)
+        for nutrient_id in ['en', 'va', 'fo']:
+            tot_prod_task, tot_prod_path = (
+                nut_task_path_tot_prod_map[nutrient_id])
+
+            tot_prod_nut_scenario_path = os.path.join(
                 WORKING_DIR, 'main_outputs',
-                f'poll_suff_{landcover_short_suffix}.tif')
-            threshold_task = task_graph.add_task(
-                func=threshold_raster,
+                f'tot_prod_{nutrient_id}_1d_{landcover_short_suffix}.tif')
+
+            tot_prod_nut_scenario_task = task_graph.add_task(
+                func=mask_raster,
                 args=(
-                    proportional_hab_area_2km_path, threshold_val,
-                    poll_suff_path),
-                target_path_list=[poll_suff_path],
-                dependent_task_list=[convolve2d_task],
-                task_name=f'threshold {os.path.basename(poll_suff_path)}')
+                    ag_task_path_tuple[1], tot_prod_path,
+                    tot_prod_nut_scenario_path),
+                target_path_list=[tot_prod_nut_scenario_path],
+                dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
+                task_name=(
+                    f'tot_prod_{nutrient_id}_1d{landcover_short_suffix}'))
 
             _ = task_graph.add_task(
                 func=build_overviews,
                 priority=100,
-                args=(poll_suff_path, 'mode'),
-                target_path_list=[
-                    f'{poll_suff_path}.ovr'],
-                dependent_task_list=[threshold_task],
-                task_name=f'compress {os.path.basename(poll_suff_path)}',
-                )
+                args=(tot_prod_nut_scenario_path, 'average'),
+                target_path_list=[f'{tot_prod_nut_scenario_path}.ovr'],
+                dependent_task_list=[tot_prod_nut_scenario_task],
+                task_name=('compress' +
+                           os.path.basename(tot_prod_nut_scenario_path)))
 
-            # TODO:
-            # poll_serv_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
-            # pollination-derived annual production of energy (KJ/yr),
-            # vitamin A (IU/yr), and folate (mg/yr)
+            poll_dep_prod_task, poll_dep_prod_path = (
+                nut_task_path_poll_dep_prod_map[nutrient_id])
 
-            # TODO:
-            # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
-            # total annual production of energy (KJ/yr), vitamin A (IU/yr),
-            # and folate (mg/yr)
+            poll_dep_prod_nut_scenario_path = os.path.join(
+                WORKING_DIR, 'main_outputs',
+                f'poll_dep_prod_{nutrient_id}_1d_{landcover_short_suffix}.tif')
 
+            poll_dep_prod_nut_scenario_task = task_graph.add_task(
+                func=mask_raster,
+                args=(
+                    ag_task_path_tuple[1], poll_dep_prod_path,
+                    poll_dep_prod_nut_scenario_path),
+                target_path_list=[poll_dep_prod_nut_scenario_path],
+                dependent_task_list=[
+                    poll_dep_prod_task, ag_task_path_tuple[0]],
+                task_name=(
+                    f'poll_dep_prod_{nutrient_id}_'
+                    f'1d{landcover_short_suffix}'))
 
-            # TODO:
-            # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
-            # contribution of wild pollination to total annual micronutrient
-            # production, as a proportion of total energy, vitamin or folate
+            _ = task_graph.add_task(
+                func=build_overviews,
+                priority=100,
+                args=(poll_dep_prod_nut_scenario_path, 'average'),
+                target_path_list=[f'{poll_dep_prod_nut_scenario_path}.ovr'],
+                dependent_task_list=[poll_dep_prod_nut_scenario_task],
+                task_name=('compress' +
+                           os.path.basename(poll_dep_prod_nut_scenario_path)))
 
-            # TODO:
-            # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
-            # average contribution of wild pollination to total annual
-            # micronutrient production, across all three nutrients
+            # poll_serv_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5: wild pollination-
+            # derived annual production of energy (KJ/yr), vitamin A (IU/yr),
+            # and folate (mg/yr) (given the habitat and whether it is
+            # sufficient to meet pollination needs)
+            poll_serv_prod_nut_scenario_path = os.path.join(
+                WORKING_DIR, 'main_outputs',
+                f'poll_serv_prod_{nutrient_id}_1d_'
+                f'{landcover_short_suffix}.tif')
 
+            poll_serv_prod_nut_scenario_task = task_graph.add_task(
+                func=mask_raster,
+                args=(
+                    hab_task_path_tuple[1], poll_suff_path,
+                    poll_serv_prod_nut_scenario_path),
+                target_path_list=[poll_serv_prod_nut_scenario_path],
+                dependent_task_list=[
+                    poll_suff_task, hab_task_path_tuple[0]],
+                task_name=(
+                    f'poll_serv_prod_{nutrient_id}_'
+                    f'1d{landcover_short_suffix}'))
 
-            # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
+            _ = task_graph.add_task(
+                func=build_overviews,
+                priority=100,
+                args=(poll_serv_prod_nut_scenario_path, 'average'),
+                target_path_list=[f'{poll_serv_prod_nut_scenario_path}.ovr'],
+                dependent_task_list=[poll_serv_prod_nut_scenario_task],
+                task_name=('compress' + os.path.basename(
+                    poll_serv_prod_nut_scenario_path)))
+
+        # TODO:
+        # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+        # contribution of wild pollination to total annual micronutrient
+        # production, as a proportion of total energy, vitamin or folate
+
+        # TODO:
+        # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
+        # average contribution of wild pollination to total annual
+        # micronutrient production, across all three nutrients
+
+        # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -524,27 +574,48 @@ class Threshold(object):
         return result
 
 
-def threshold_raster(base_path, threshold_val, target_path):
-    """Threshold base to be 1 if >= `theshold_val`.
+def threshold_select_raster(
+        base_raster_path, select_raster_path, threshold_val, target_path):
+    """Select `select` if `base` >= `threshold_val`.
 
     Parameters:
-        base_path (string): path to single band raster.
+        base_raster_path (string): path to single band raster that will be
+            used to determine the threshold mask to select from
+            `select_raster_path`.
+        select_raster_path (string): path to single band raster to pass
+            through to target if aligned `base` pixel is >= `threshold_val`
+            0 otherwise, or nodata if base == nodata. Must be the same
+            shape as `base_raster_path`.
         threshold_val (numeric): value to use as threshold cutoff
         target_path (string): path to desired output raster, raster is a
-            byte type with same dimensions and projection as `base_path`.
-            A pixel in this raster will be 1 if the corresponding pixel in
-            `base_path` is >= `threshold_val`, 0 in all other cases.
+            byte type with same dimensions and projection as
+            `base_raster_path`. A pixel in this raster will be `select` if
+            the corresponding pixel in `base_raster_path` is >=
+            `threshold_val`, 0 otherwise or nodata if `base` == nodata.
 
     Returns:
         None.
 
     """
-    base_nodata = pygeoprocessing.get_raster_info(base_path)['nodata'][0]
+    base_nodata = pygeoprocessing.get_raster_info(
+        base_raster_path)['nodata'][0]
     target_nodata = 2
+
+    def threshold_select_op(
+            base_array, select_array, threshold_val, base_nodata,
+            target_nodata):
+        result = numpy.empty_like(select_array)
+        result[:] = target_nodata
+        valid_mask = base_array != base_nodata
+        result[valid_mask] = numpy.where(
+            base_array[valid_mask] >= threshold_val,
+            select_array[valid_mask], 0)
+        return result
+
     pygeoprocessing.raster_calculator(
-        [(base_path, 1)],
-        Threshold(threshold_val, base_nodata, target_nodata), target_path,
-        gdal.GDT_Byte, target_nodata, gtiff_creation_options=(
+        [(base_raster_path, 1), (select_raster_path, 1),
+         threshold_val, base_nodata, target_nodata], threshold_select_op,
+        target_path, gdal.GDT_Byte, target_nodata, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
             'NUM_THREADS=ALL_CPUS'))

@@ -31,7 +31,15 @@ logging.basicConfig(
 LOGGER = logging.getLogger('ipbes_pollination')
 
 # the following are the globio landcover codes. A tuple (x, y) indicates the
-# inclusive range from x to y.
+# inclusive range from x to y. Pollinator habitat was defined as any natural
+# land covers, as defined (GLOBIO land-cover classes 6, secondary vegetation,
+# and  50-180, various types of primary vegetation). To test sensitivity to
+# this definition we included "semi-natural" habitats (GLOBIO land-cover
+# classes 3, 4, and 5; pasture, rangeland and forestry, respectively) in
+# addition to "natural", and repeated all analyses with semi-natural  plus
+# natural habitats, but this did not substantially alter the results  so we do
+# not include it in our final analysis or code base.
+
 GLOBIO_AG_CODES = [2, (230, 232)]
 GLOBIO_NATURAL_CODES = [6, (50, 180)]
 
@@ -48,170 +56,6 @@ def main():
     task_graph = taskgraph.TaskGraph(
         reproduce_env['CACHE_DIR'], N_WORKERS, delayed_start=True,
         reporting_interval=5.0)
-
-    # The following table is used for:
-    # Pollinator habitat was defined as any natural land covers, as defined
-    #  in Table X  (GLOBIO land-cover classes 6, secondary vegetation, and
-    #  50-180, various types of primary vegetation). To test sensitivity to
-    #  this definition we included "semi-natural" habitats (GLOBIO land-cover
-    #  classes 3, 4, and 5; pasture, rangeland and forestry, respectively) in
-    #  addition to "natural", and repeated all analyses with semi-natural
-    #  plus natural habitats, but this did not substantially alter the results
-    #  so we do not include it in our final analysis or code base.
-    globio_class_table_url = (
-        'https://storage.cloud.google.com/ecoshard-root/'
-        'GLOBIOluclass_md5_4506b5c87fe70f7fba63eb4ee5b1e2d0.csv')
-    globio_table_path = os.path.join(
-        reproduce_env['DATA_DIR'], 'pollination_data',
-        os.path.basename(globio_class_table_url))
-    globio_class_table_fetch_task = task_graph.add_task(
-        func=google_bucket_fetch_and_validate,
-        args=(
-            globio_class_table_url, GOOGLE_BUCKET_KEY_PATH,
-            globio_table_path),
-        target_path_list=[globio_table_path],
-        task_name=f'fetch {os.path.basename(globio_class_table_url)}')
-
-    # The proportional area of natural within 2 km was calculated for every
-    #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
-    #  232) at 10 arc seconds (~300 m) resolution. This 2 km scale represents
-    #  the distance most commonly found to be predictive of pollination
-    #  services (Kennedy et al. 2013).
-    kernel_raster_path = os.path.join(
-        reproduce_env['DATA_DIR'], 'radial_kernel.tif')
-    kernel_task = task_graph.add_task(
-        func=create_radial_convolution_mask,
-        args=(0.00277778, 2000., kernel_raster_path),
-        target_path_list=[kernel_raster_path],
-        task_name='make convolution kernel')
-
-    landcover_data = {
-        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP5_RCP85_md5_1b3cc1ce6d0ff14d66da676ef194f130.tif",
-        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_803166420f51e5ef7dcaa970faa98173.tif",
-        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_e77077a3220a36f7f0441bbd0f7f14ab.tif",
-        'Globio4_landuse_10sec_1850': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1850_md5_0b7fcb4b180d46b4fc2245beee76d6b9.tif",
-        'Globio4_landuse_10sec_2015': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_2015_md5_939a57c2437cd09bd5a9eb472b9bd781.tif",
-        'Globio4_landuse_10sec_1980': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1980_md5_f6384eac7579318524439df9530ca1f4.tif",
-        'Globio4_landuse_10sec_1945': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1945_md5_52c7b4c38c26defefa61132fd25c5584.tif",
-        'Globio4_landuse_10sec_1910': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1910_md5_e7da8fa29db305ff63c99fed7ca8d5e2.tif",
-        'Globio4_landuse_10sec_1900': "https://storage.cloud.google.com/ecoshard-root/globio_landcover/Globio4_landuse_10sec_1900_md5_f5db818a5b16799bf2cb627e574120a4.tif",
-        }
-
-    # mask landcover into agriculture and pollinator habitat
-    for landcover_key, landcover_url in landcover_data.items():
-        landcover_env_path = f'landcover/{os.path.basename(landcover_url)}'
-        landcover_path = reproduce_env.predict_path(landcover_env_path)
-        landcover_fetch_task = task_graph.add_task(
-            func=google_bucket_fetch_and_validate,
-            args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
-            target_path_list=[landcover_path],
-            task_name=f'fetch {landcover_key}')
-
-        _ = task_graph.add_task(
-            func=build_overviews,
-            args=(landcover_path, 'mode'),
-            target_path_list=[f'{landcover_path}.ovr'],
-            dependent_task_list=[landcover_fetch_task],
-            task_name=f'compress {os.path.basename(landcover_path)}')
-
-        hab_task_path_list = []
-
-        for mask_prefix, globio_codes in [
-                ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
-            mask_key = f'{landcover_key}_{mask_prefix}_mask'
-            mask_target_path = os.path.join(
-                reproduce_env['DATA_DIR'],
-                f'{mask_prefix}_mask/{mask_key}.tif')
-
-            mask_task = task_graph.add_task(
-                func=mask_raster,
-                args=(
-                    reproduce_env.predict_path(landcover_env_path),
-                    globio_codes, mask_target_path),
-                target_path_list=[mask_target_path],
-                dependent_task_list=[landcover_fetch_task],
-                task_name=f'mask {mask_key}',)
-
-            _ = task_graph.add_task(
-                func=build_overviews,
-                args=(mask_target_path, 'mode'),
-                target_path_list=[
-                    f'{mask_target_path}.ovr'],
-                dependent_task_list=[mask_task],
-                task_name=f'compress {os.path.basename(mask_target_path)}')
-
-            if mask_prefix == 'hab':
-                hab_task_path_list.append(
-                    (mask_task, mask_target_path))
-
-        raster_tasks_to_threshold_list = []
-        for mask_task, mask_path, in hab_task_path_list:
-            proportional_hab_area_2km_path = os.path.join(
-                reproduce_env['DATA_DIR'], 'proportional_area',
-                f'{landcover_key}_hab_prop_area_2km.tif')
-            convolve2d_task = task_graph.add_task(
-                func=pygeoprocessing.convolve_2d,
-                args=[
-                    (mask_path, 1), (kernel_raster_path, 1),
-                    proportional_hab_area_2km_path],
-                kwargs={
-                    'working_dir': reproduce_env['CACHE_DIR'],
-                    'gtiff_creation_options': (
-                        'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
-                        'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
-                        'NUM_THREADS=ALL_CPUS')},
-                dependent_task_list=[mask_task, kernel_task],
-                target_path_list=[proportional_hab_area_2km_path],
-                task_name=(
-                    'calculate proportional'
-                    f' {os.path.basename(proportional_hab_area_2km_path)}'))
-
-            _ = task_graph.add_task(
-                func=build_overviews,
-                args=(proportional_hab_area_2km_path, 'average'),
-                target_path_list=[
-                    f'{proportional_hab_area_2km_path}.ovr'],
-                dependent_task_list=[convolve2d_task],
-                task_name=f'compress {os.path.basename(proportional_hab_area_2km_path)}',
-                )
-
-            raster_tasks_to_threshold_list.append(
-                (convolve2d_task, proportional_hab_area_2km_path))
-
-        #  1.1.4.  Sufficiency threshold
-        #  A threshold of 0.3 was set to evaluate whether there was sufficient
-        #   pollinator habitat in the 2 km around farmland to provide pollination
-        #   services, based on Kremen et al.'s (2005)  estimate of the area
-        #   requirements for achieving full pollination. This produced a map of
-        #   wild pollination sufficiency where every agricultural pixel was
-        #   designated in a binary fashion: 0 if proportional area of habitat was
-        #   less than 0.3; 1 if greater than 0.3. Maps of pollination sufficiency
-        #   can be found at (permanent link to output), outputs "poll_suff_..."
-        #   below.
-        threshold_val = 0.3
-        for convolve2d_task, proportional_hab_area_2km_path in (
-                raster_tasks_to_threshold_list):
-            thresholded_path = os.path.join(
-                reproduce_env['DATA_DIR'],
-                'poll_suff_'
-                f'{os.path.basename(proportional_hab_area_2km_path)}')
-            threshold_task = task_graph.add_task(
-                func=threshold_raster,
-                args=(
-                    proportional_hab_area_2km_path, threshold_val,
-                    thresholded_path),
-                target_path_list=[thresholded_path],
-                dependent_task_list=[convolve2d_task],
-                task_name=f'threshold {os.path.basename(thresholded_path)}')
-
-            _ = task_graph.add_task(
-                func=build_overviews,
-                args=(thresholded_path, 'mode'),
-                target_path_list=[
-                    f'{thresholded_path}.ovr'],
-                dependent_task_list=[threshold_task],
-                task_name=f'compress {os.path.basename(thresholded_path)}',
-                )
 
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
     # Pollination-dependence of crops, crop yields, and crop micronutrient
@@ -249,15 +93,19 @@ def main():
         task_name=f'fetch {os.path.basename(crop_nutrient_table_path)}')
 
     # 1.2.3.  Crop production
-    # Spatially-explicit global crop yields (tons/ha) at 5 arc min (~10 km) were
-    # taken from Monfreda et al. (2008) for 115 crops (permanent link to crop
-    # yield folder). These yields were multiplied by crop pollination dependency
-    # to calculate the pollination-dependent crop yield for each 5 min grid
-    # cell.
-    # Note the monfredia maps are in units of per-hectare yields
+
+    # Spatially-explicit global crop yields (tons/ha) at 5 arc min (~10 km)
+    # were taken from Monfreda et al. (2008) for 115 crops (permanent link to
+    # crop yield folder). These yields were multiplied by crop pollination
+    # dependency to calculate the pollination-dependent crop yield for each 5
+    # min grid cell. Note the monfredia maps are in units of per-hectare
+    # yields
+
     yield_zip_url = (
         'https://storage.cloud.google.com/ecoshard-root/ipbes/'
-        'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.zip')
+        'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.'
+        'zip')
+
     yield_zip_path = os.path.join(
         reproduce_env['DATA_DIR'], 'observed_yields',
         os.path.basename(yield_zip_url))
@@ -345,6 +193,196 @@ def main():
         task_name='cont_prod_avg',
         priority=100)
 
+    # The proportional area of natural within 2 km was calculated for every
+    #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
+    #  232) at 10 arc seconds (~300 m) resolution. This 2 km scale represents
+    #  the distance most commonly found to be predictive of pollination
+    #  services (Kennedy et al. 2013).
+    kernel_raster_path = os.path.join(
+        reproduce_env['DATA_DIR'], 'radial_kernel.tif')
+    kernel_task = task_graph.add_task(
+        func=create_radial_convolution_mask,
+        args=(0.00277778, 2000., kernel_raster_path),
+        target_path_list=[kernel_raster_path],
+        task_name='make convolution kernel')
+
+    landcover_data = {
+        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP5_RCP85_'
+            'md5_1b3cc1ce6d0ff14d66da676ef194f130.tif', 'ssp5'),
+        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_'
+            '803166420f51e5ef7dcaa970faa98173.tif', 'ssp1'),
+        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_'
+            'e77077a3220a36f7f0441bbd0f7f14ab.tif', 'ssp3'),
+        'Globio4_landuse_10sec_1850': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1850_md5_'
+            '0b7fcb4b180d46b4fc2245beee76d6b9.tif', '1850'),
+        'Globio4_landuse_10sec_2015': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_2015_md5_'
+            '939a57c2437cd09bd5a9eb472b9bd781.tif', 'cur'),
+        'Globio4_landuse_10sec_1980': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1980_md5_'
+            'f6384eac7579318524439df9530ca1f4.tif', '1980'),
+        'Globio4_landuse_10sec_1945': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1945_md5_'
+            '52c7b4c38c26defefa61132fd25c5584.tif', '1945'),
+        'Globio4_landuse_10sec_1910': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1910_md5_'
+            'e7da8fa29db305ff63c99fed7ca8d5e2.tif', '1910'),
+        'Globio4_landuse_10sec_1900': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1900_md5_'
+            'f5db818a5b16799bf2cb627e574120a4.tif', '1900'),
+        }
+
+    # mask landcover into agriculture and pollinator habitat
+    for landcover_key, (landcover_url, landcover_short_suffix) in (
+            landcover_data.items()):
+        landcover_env_path = f'landcover/{os.path.basename(landcover_url)}'
+        landcover_path = reproduce_env.predict_path(landcover_env_path)
+        landcover_fetch_task = task_graph.add_task(
+            func=google_bucket_fetch_and_validate,
+            args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
+            target_path_list=[landcover_path],
+            task_name=f'fetch {landcover_key}')
+
+        _ = task_graph.add_task(
+            func=build_overviews,
+            args=(landcover_path, 'mode'),
+            target_path_list=[f'{landcover_path}.ovr'],
+            dependent_task_list=[landcover_fetch_task],
+            task_name=f'compress {os.path.basename(landcover_path)}')
+
+        hab_task_path_list = []
+
+        for mask_prefix, globio_codes in [
+                ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
+            mask_key = f'{landcover_key}_{mask_prefix}_mask'
+            mask_target_path = os.path.join(
+                reproduce_env['DATA_DIR'],
+                f'{mask_prefix}_mask/{mask_key}.tif')
+
+            mask_task = task_graph.add_task(
+                func=mask_raster,
+                args=(
+                    reproduce_env.predict_path(landcover_env_path),
+                    globio_codes, mask_target_path),
+                target_path_list=[mask_target_path],
+                dependent_task_list=[landcover_fetch_task],
+                task_name=f'mask {mask_key}',)
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                args=(mask_target_path, 'mode'),
+                target_path_list=[
+                    f'{mask_target_path}.ovr'],
+                dependent_task_list=[mask_task],
+                task_name=f'compress {os.path.basename(mask_target_path)}')
+
+            if mask_prefix == 'hab':
+                hab_task_path_list.append(
+                    (mask_task, mask_target_path))
+
+        raster_tasks_to_threshold_list = []
+        for mask_task, mask_path, in hab_task_path_list:
+            proportional_hab_area_2km_path = os.path.join(
+                reproduce_env['DATA_DIR'], 'proportional_area',
+                f'{landcover_key}_hab_prop_area_2km.tif')
+            convolve2d_task = task_graph.add_task(
+                func=pygeoprocessing.convolve_2d,
+                args=[
+                    (mask_path, 1), (kernel_raster_path, 1),
+                    proportional_hab_area_2km_path],
+                kwargs={
+                    'working_dir': reproduce_env['CACHE_DIR'],
+                    'gtiff_creation_options': (
+                        'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
+                        'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+                        'NUM_THREADS=ALL_CPUS')},
+                dependent_task_list=[mask_task, kernel_task],
+                target_path_list=[proportional_hab_area_2km_path],
+                task_name=(
+                    'calculate proportional'
+                    f' {os.path.basename(proportional_hab_area_2km_path)}'))
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                args=(proportional_hab_area_2km_path, 'average'),
+                target_path_list=[
+                    f'{proportional_hab_area_2km_path}.ovr'],
+                dependent_task_list=[convolve2d_task],
+                task_name=(
+                    'compress '
+                    f'{os.path.basename(proportional_hab_area_2km_path)}',
+                ))
+
+            raster_tasks_to_threshold_list.append(
+                (convolve2d_task, proportional_hab_area_2km_path))
+
+        #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
+        #  evaluate whether there was sufficient pollinator habitat in the 2
+        #  km around farmland to provide pollination services, based on Kremen
+        #  et al.'s (2005)  estimate of the area requirements for achieving
+        #  full pollination. This produced a map of wild pollination
+        #  sufficiency where every agricultural pixel was designated in a
+        #  binary fashion: 0 if proportional area of habitat was less than
+        #  0.3; 1 if greater than 0.3. Maps of pollination sufficiency can be
+        #  found at (permanent link to output), outputs "poll_suff_..." below.
+
+        threshold_val = 0.3
+        for convolve2d_task, proportional_hab_area_2km_path in (
+                raster_tasks_to_threshold_list):
+            thresholded_path = os.path.join(
+                reproduce_env['DATA_DIR'],
+                f'poll_suff_{landcover_short_suffix}.tif')
+            threshold_task = task_graph.add_task(
+                func=threshold_raster,
+                args=(
+                    proportional_hab_area_2km_path, threshold_val,
+                    thresholded_path),
+                target_path_list=[thresholded_path],
+                dependent_task_list=[convolve2d_task],
+                task_name=f'threshold {os.path.basename(thresholded_path)}')
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                args=(thresholded_path, 'mode'),
+                target_path_list=[
+                    f'{thresholded_path}.ovr'],
+                dependent_task_list=[threshold_task],
+                task_name=f'compress {os.path.basename(thresholded_path)}',
+                )
+
+            # poll_serv_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+            # pollination-derived annual production of energy (KJ/yr),
+            # vitamin A (IU/yr), and folate (mg/yr)
+
+            # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+            # total annual production of energy (KJ/yr), vitamin A (IU/yr),
+            # and folate (mg/yr)
+
+            # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+            # contribution of wild pollination to total annual micronutrient
+            # production, as a proportion of total energy, vitamin or folate
+
+            # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
+            # average contribution of wild pollination to total annual
+            # micronutrient production, across all three nutrients
+
+
+
+            # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
+
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
     #   Nutrition provided by wild pollinators on each pixel of agricultural
@@ -373,7 +411,7 @@ def main():
 
 def create_radial_convolution_mask(
         pixel_size_degree, radius_meters, kernel_filepath):
-    """Creates a radial mask to sample pixels in convolution filter.
+    """Create a radial mask to sample pixels in convolution filter.
 
     Parameters:
         pixel_size_degree (float): size of pixel in degrees.
@@ -383,6 +421,7 @@ def create_radial_convolution_mask(
         A 2D numpy array that can be used in a convolution to aggregate a
         raster while accounting for partial coverage of the circle on the
         edges of the pixel.
+
     """
     degree_len_0 = 110574  # length at 0 degrees
     degree_len_60 = 111412  # length at 60 degrees
@@ -429,8 +468,8 @@ def google_bucket_fetch_and_validate(url, json_key_path, target_path):
     Parameters:
         url (string): url to blob, matches the form
             '^https://storage.cloud.google.com/([^/]*)/(.*)$'
-        json_key_path (string): path to Google Cloud private key generated
-            by https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+        json_key_path (string): path to Google Cloud private key generated by
+        https://cloud.google.com/iam/docs/creating-managing-service-account-keys
         target_path (string): path to target file.
 
     Returns:
@@ -562,15 +601,15 @@ def unzip_file(zipfile_path, target_dir, touchfile_path):
 
 
 def build_overviews(local_path, resample_method):
-    """Builds as many overviews as possible using 'average' interpolation.
+    """Build as many overviews as possible.
 
     Parameters:
         local_path (string): path to GTiff raster to build overviews on. The
             overview will be built externally in a .ovr file in the same
             directory.
-        resample_method (string): interpolation mode for overviews, must be one of
-            'nearest', 'average', 'gauss', 'cubic', 'cubicspline', 'lanczos',
-            'average_mp', 'average_magphase', 'mode'.
+        resample_method (string): interpolation mode for overviews, must be
+        one of 'nearest', 'average', 'gauss', 'cubic', 'cubicspline',
+        'lanczos', 'average_mp', 'average_magphase', 'mode'.
 
     Returns:
         None.
@@ -606,9 +645,10 @@ def _make_logger_callback(message):
     Returns:
         Function with signature:
             logger_callback(df_complete, psz_message, p_progress_arg)
+
     """
     def logger_callback(df_complete, psz_message, p_progress_arg):
-        """The argument names come from the GDAL API for callbacks."""
+        """Log updates using GDAL API for callbacks."""
         try:
             current_time = time.time()
             if ((current_time - logger_callback.last_time) > 5.0 or
@@ -706,7 +746,7 @@ def create_prod_nutrient_raster(
 def create_cont_prod_nutrient_raster(
         poll_serv_nutrient_path, tot_prod_nut_path,
         target_cont_prod_nutrient_path):
-    """Calculate proportion of poll_serv to tot_prod
+    """Calculate proportion of poll_serv to tot_prod.
 
     Contribution of wild pollination to total annual micronutrient production,
     as a proportion of nutrient.

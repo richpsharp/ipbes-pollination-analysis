@@ -340,43 +340,49 @@ def main():
         threshold_val = 0.3
         for convolve2d_task, proportional_hab_area_2km_path in (
                 raster_tasks_to_threshold_list):
-            thresholded_path = os.path.join(
-                reproduce_env['DATA_DIR'],
+            poll_suff_path = os.path.join(
+                WORKING_DIR, 'main_outputs',
                 f'poll_suff_{landcover_short_suffix}.tif')
             threshold_task = task_graph.add_task(
                 func=threshold_raster,
                 args=(
                     proportional_hab_area_2km_path, threshold_val,
-                    thresholded_path),
-                target_path_list=[thresholded_path],
+                    poll_suff_path),
+                target_path_list=[poll_suff_path],
                 dependent_task_list=[convolve2d_task],
-                task_name=f'threshold {os.path.basename(thresholded_path)}')
+                task_name=f'threshold {os.path.basename(poll_suff_path)}')
 
             _ = task_graph.add_task(
                 func=build_overviews,
                 priority=100,
-                args=(thresholded_path, 'mode'),
+                args=(poll_suff_path, 'mode'),
                 target_path_list=[
-                    f'{thresholded_path}.ovr'],
+                    f'{poll_suff_path}.ovr'],
                 dependent_task_list=[threshold_task],
-                task_name=f'compress {os.path.basename(thresholded_path)}',
+                task_name=f'compress {os.path.basename(poll_suff_path)}',
                 )
 
+            # TODO:
             # poll_serv_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
             # pollination-derived annual production of energy (KJ/yr),
             # vitamin A (IU/yr), and folate (mg/yr)
 
+            # TODO:
             # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
             # total annual production of energy (KJ/yr), vitamin A (IU/yr),
             # and folate (mg/yr)
 
+
+            # TODO:
             # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
             # contribution of wild pollination to total annual micronutrient
             # production, as a proportion of total energy, vitamin or folate
 
+            # TODO:
             # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
             # average contribution of wild pollination to total annual
             # micronutrient production, across all three nutrients
+
 
             # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
 

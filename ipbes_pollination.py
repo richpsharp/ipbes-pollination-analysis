@@ -140,35 +140,35 @@ def main():
     for nutrient_id, nutrient_name in [
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
         # total annual production of nutrient
-        tot_prod_nut_1d_path = os.path.join(
+        tot_prod_nut_10s_path = os.path.join(
             WORKING_DIR, 'total_nutrient_rasters',
-            f'tot_prod_{nutrient_id}_1d.tif')
-        tot_prod_nut_1d_task = task_graph.add_task(
+            f'tot_prod_{nutrient_id}_10s.tif')
+        tot_prod_nut_10s_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
-                False, tot_prod_nut_1d_path),
-            target_path_list=[tot_prod_nut_1d_path],
+                False, tot_prod_nut_10s_path),
+            target_path_list=[tot_prod_nut_10s_path],
             dependent_task_list=[
                 unzip_yield_task, crop_nutrient_table_fetch_task],
             task_name=f'total nut prod {nutrient_name}')
         nut_task_path_tot_prod_map[nutrient_id] = (
-            tot_prod_nut_1d_task, tot_prod_nut_1d_path)
+            tot_prod_nut_10s_task, tot_prod_nut_10s_path)
 
         # pollination-dependent annual production of nutrient
-        poll_dep_prod_nut_1d_path = os.path.join(
+        poll_dep_prod_nut_10s_path = os.path.join(
             WORKING_DIR, 'total_poll_dependent_production',
-            f'poll_dep_prod_{nutrient_id}_1d.tif')
-        poll_dep_prod_nut_1d_task = task_graph.add_task(
+            f'poll_dep_prod_{nutrient_id}_10s.tif')
+        poll_dep_prod_nut_10s_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
-                True, poll_dep_prod_nut_1d_path),
-            target_path_list=[poll_dep_prod_nut_1d_path],
+                True, poll_dep_prod_nut_10s_path),
+            target_path_list=[poll_dep_prod_nut_10s_path],
             dependent_task_list=[unzip_yield_task],
             task_name=f'total pol serv {nutrient_name}')
         nut_task_path_poll_dep_prod_map[nutrient_id] = (
-            poll_dep_prod_nut_1d_task, poll_dep_prod_nut_1d_path)
+            poll_dep_prod_nut_10s_task, poll_dep_prod_nut_10s_path)
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
@@ -351,7 +351,7 @@ def main():
 
             tot_prod_nut_scenario_path = os.path.join(
                 WORKING_DIR, 'main_outputs',
-                f'tot_prod_{nutrient_id}_1d_{landcover_short_suffix}.tif')
+                f'tot_prod_{nutrient_id}_10s_{landcover_short_suffix}.tif')
 
             tot_prod_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
@@ -361,7 +361,7 @@ def main():
                 target_path_list=[tot_prod_nut_scenario_path],
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
                 task_name=(
-                    f'tot_prod_{nutrient_id}_1d{landcover_short_suffix}'))
+                    f'tot_prod_{nutrient_id}_10s_{landcover_short_suffix}'))
 
             _ = task_graph.add_task(
                 func=build_overviews,
@@ -377,7 +377,8 @@ def main():
 
             poll_dep_prod_nut_scenario_path = os.path.join(
                 WORKING_DIR, 'main_outputs',
-                f'poll_dep_prod_{nutrient_id}_1d_{landcover_short_suffix}.tif')
+                f'poll_dep_prod_{nutrient_id}_10s_'
+                f'{landcover_short_suffix}.tif')
 
             poll_dep_prod_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
@@ -389,7 +390,7 @@ def main():
                     poll_dep_prod_task, ag_task_path_tuple[0]],
                 task_name=(
                     f'poll_dep_prod_{nutrient_id}_'
-                    f'1d{landcover_short_suffix}'))
+                    f'10s_{landcover_short_suffix}'))
 
             _ = task_graph.add_task(
                 func=build_overviews,
@@ -406,7 +407,7 @@ def main():
             # sufficient to meet pollination needs)
             poll_serv_prod_nut_scenario_path = os.path.join(
                 WORKING_DIR, 'main_outputs',
-                f'poll_serv_prod_{nutrient_id}_1d_'
+                f'poll_serv_prod_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
 
             poll_serv_prod_nut_scenario_task = task_graph.add_task(
@@ -419,7 +420,7 @@ def main():
                     poll_suff_task, poll_dep_prod_nut_scenario_task],
                 task_name=(
                     f'poll_serv_prod_{nutrient_id}_'
-                    f'1d{landcover_short_suffix}'))
+                    f'10s_{landcover_short_suffix}'))
 
             _ = task_graph.add_task(
                 func=build_overviews,
@@ -430,10 +431,37 @@ def main():
                 task_name=('compress' + os.path.basename(
                     poll_serv_prod_nut_scenario_path)))
 
-        # TODO:
-        # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
-        # contribution of wild pollination to total annual micronutrient
-        # production, as a proportion of total energy, vitamin or folate
+            # TODO:
+            # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+            # contribution of wild pollination to total annual micronutrient
+            # production, as a proportion of total energy, vitamin or folate
+
+            target_cont_prod_nutrient_path = os.path.join(
+                WORKING_DIR, 'main_outputs',
+                f'cont_poll_serv_prod_{nutrient_id}_10s_'
+                f'{landcover_short_suffix}.tif')
+            cont_prod_task = task_graph.add_task(
+                func=create_cont_prod_nutrient_raster,
+                args=(
+                    poll_serv_prod_nut_scenario_path,
+                    tot_prod_nut_scenario_path,
+                    target_cont_prod_nutrient_path),
+                target_path_list=[target_cont_prod_nutrient_path],
+                dependent_task_list=[
+                    poll_serv_prod_nut_scenario_task,
+                    tot_prod_nut_scenario_task],
+                task_name=(
+                    f'cont_poll_serv_prod_{nutrient_id}_10s_'
+                    f'{landcover_short_suffix}.tif'))
+
+            _ = task_graph.add_task(
+                func=build_overviews,
+                priority=-100,
+                args=(target_cont_prod_nutrient_path, 'average'),
+                target_path_list=[f'{target_cont_prod_nutrient_path}.ovr'],
+                dependent_task_list=[cont_prod_task],
+                task_name=('compress' + os.path.basename(
+                    target_cont_prod_nutrient_path)))
 
         # TODO:
         # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5

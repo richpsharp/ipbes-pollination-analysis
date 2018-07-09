@@ -286,13 +286,15 @@ def main():
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
 
+    cont_prod_task_path_list = []
+
     for nutrient_id, nutrient_name in [
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
         tot_prod_nut_1d_path = os.path.join(
             WORKING_DIR, 'tot_prod_nut_prod_rasters',
             f'tot_prod_{nutrient_id}_1d.tif')
 
-        tot_prod_nutrient_task = task_graph.add_task(
+        tot_prod_nutrient_1d_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
@@ -306,7 +308,7 @@ def main():
         poll_serv_nutrient_1d_path = os.path.join(
             WORKING_DIR, 'poll_serv_nutrient_rasters',
             f'poll_serv_{nutrient_id}_1d.tif')
-        poll_serv_nutrient_task = task_graph.add_task(
+        poll_serv_nutrient_1d_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
@@ -327,9 +329,21 @@ def main():
                 cont_prod_nutrient_1d_path),
             target_path_list=[cont_prod_nutrient_1d_path],
             dependent_task_list=[
-                poll_serv_nutrient_task, tot_prod_nutrient_task],
+                poll_serv_nutrient_1d_task, tot_prod_nutrient_1d_task],
             task_name=f'cont prod {nutrient_name}',
             priority=100)
+        cont_prod_task_path_list.append(
+            (cont_prod_nutrient_task, cont_prod_nutrient_1d_path))
+
+    cont_prod_avg_1d_path = os.path.join(WORKING_DIR, 'cont_prod_avg_1d.tif')
+    cont_prod_avg_1d_task = task_graph.add_task(
+        func=create_avg_raster,
+        args=([x[1] for x in cont_prod_task_path_list],
+              cont_prod_avg_1d_path),
+        target_path_list=[cont_prod_avg_1d_path],
+        dependent_task_list=[x[0] for x in cont_prod_task_path_list],
+        task_name='cont_prod_avg',
+        priority=100)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -732,6 +746,39 @@ def create_cont_prod_nutrient_raster(
         [(poll_serv_nutrient_path, 1), (tot_prod_nut_path, 1)],
         calc_proportion, target_cont_prod_nutrient_path, gdal.GDT_Float32,
         target_nodata)
+
+
+def create_avg_raster(base_path_list, target_avg_path):
+    """Calculate the per-pixel average of the base path list.
+
+    Parameters:
+        base_path_list (list): list of raster paths to average.
+        target_avg_path (str): path to desired target file that will have a
+            per-pixel average of all the input rasters.
+
+    Returns:
+        None
+
+    """
+    nodata_set = set([
+        pygeoprocessing.get_raster_info(path) for path in base_path_list])
+    assert(len(nodata_set) == 1)
+    nodata = nodata_set.pop()
+
+    def average_op(*array_list):
+        array_stack = numpy.array(array_list)
+        nodata_mask = array_stack == nodata
+        array_stack[nodata_mask] = 0
+        result = numpy.sum(array_stack, axis=0)
+        valid_count = numpy.sum(~nodata_mask, axis=0)
+        valid_mask = valid_count > 0
+        result[valid_mask] /= valid_count[valid_mask]
+        result[~valid_mask] = nodata
+        return result
+
+    pygeoprocessing.raster_calculator(
+        [(path, 1) for path in base_path_list], average_op,
+        target_avg_path, gdal.GDT_Float32, nodata)
 
 
 def area_of_pixel(pixel_size, center_lat):

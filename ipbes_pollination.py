@@ -116,7 +116,6 @@ def main():
             yield_zip_url, GOOGLE_BUCKET_KEY_PATH,
             yield_zip_path),
         target_path_list=[yield_zip_path],
-        priority=100,
         task_name=f'fetch {os.path.basename(yield_zip_path)}')
 
     zip_touch_file_path = os.path.join(
@@ -128,8 +127,7 @@ def main():
             zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
         dependent_task_list=[yield_zip_fetch_task],
-        task_name=f'unzip monfreda_2008_observed_yield',
-        priority=100)
+        task_name=f'unzip monfreda_2008_observed_yield')
 
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
@@ -150,8 +148,7 @@ def main():
             target_path_list=[tot_prod_nut_1d_path],
             dependent_task_list=[
                 unzip_yield_task, crop_nutrient_table_fetch_task],
-            task_name=f'total nut prod {nutrient_name}',
-            priority=100)
+            task_name=f'total nut prod {nutrient_name}')
 
         poll_serv_nutrient_1d_path = os.path.join(
             WORKING_DIR, 'poll_serv_nutrient_rasters',
@@ -163,8 +160,7 @@ def main():
                 True, poll_serv_nutrient_1d_path),
             target_path_list=[poll_serv_nutrient_1d_path],
             dependent_task_list=[unzip_yield_task],
-            task_name=f'total pol serv {nutrient_name}',
-            priority=100)
+            task_name=f'total pol serv {nutrient_name}')
 
         cont_prod_nutrient_1d_path = os.path.join(
             WORKING_DIR, 'cont_prod_nutrient_rasters',
@@ -178,8 +174,8 @@ def main():
             target_path_list=[cont_prod_nutrient_1d_path],
             dependent_task_list=[
                 poll_serv_nutrient_1d_task, tot_prod_nutrient_1d_task],
-            task_name=f'cont prod {nutrient_name}',
-            priority=100)
+            task_name=f'cont prod {nutrient_name}')
+
         cont_prod_task_path_list.append(
             (cont_prod_nutrient_task, cont_prod_nutrient_1d_path))
 
@@ -190,8 +186,7 @@ def main():
               cont_prod_avg_1d_path),
         target_path_list=[cont_prod_avg_1d_path],
         dependent_task_list=[x[0] for x in cont_prod_task_path_list],
-        task_name='cont_prod_avg',
-        priority=100)
+        task_name='cont_prod_avg')
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
@@ -258,6 +253,7 @@ def main():
 
         _ = task_graph.add_task(
             func=build_overviews,
+            priority=100,
             args=(landcover_path, 'mode'),
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
@@ -283,6 +279,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
+                priority=100,
                 args=(mask_target_path, 'mode'),
                 target_path_list=[
                     f'{mask_target_path}.ovr'],
@@ -317,6 +314,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
+                priority=100,
                 args=(proportional_hab_area_2km_path, 'average'),
                 target_path_list=[
                     f'{proportional_hab_area_2km_path}.ovr'],
@@ -356,6 +354,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
+                priority=100,
                 args=(thresholded_path, 'mode'),
                 target_path_list=[
                     f'{thresholded_path}.ovr'],
@@ -378,8 +377,6 @@ def main():
             # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
             # average contribution of wild pollination to total annual
             # micronutrient production, across all three nutrients
-
-
 
             # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
 

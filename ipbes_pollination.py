@@ -193,7 +193,7 @@ def main():
                 raster_tasks_to_threshold_list):
             thresholded_path = os.path.join(
                 reproduce_env['DATA_DIR'],
-                'thresholded_'
+                'poll_suff_'
                 f'{os.path.basename(proportional_hab_area_2km_path)}')
             threshold_task = task_graph.add_task(
                 func=threshold_raster,

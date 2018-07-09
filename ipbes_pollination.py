@@ -293,7 +293,7 @@ def main():
             f'tot_prod_{nutrient_id}_1d.tif')
 
         tot_prod_nutrient_task = task_graph.add_task(
-            func=create_prod_nutrient_1d_raster,
+            func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
                 False, tot_prod_nut_1d_path),
@@ -307,13 +307,28 @@ def main():
             WORKING_DIR, 'poll_serv_nutrient_rasters',
             f'poll_serv_{nutrient_id}_1d.tif')
         poll_serv_nutrient_task = task_graph.add_task(
-            func=create_prod_nutrient_1d_raster,
+            func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
                 True, poll_serv_nutrient_1d_path),
             target_path_list=[poll_serv_nutrient_1d_path],
             dependent_task_list=[unzip_yield_task],
             task_name=f'total pol serv {nutrient_name}',
+            priority=100)
+
+        cont_prod_nutrient_1d_path = os.path.join(
+            WORKING_DIR, 'cont_prod_nutrient_rasters',
+            f'cont_prod_{nutrient_id}_1d.tif')
+        cont_prod_nutrient_task = task_graph.add_task(
+            func=create_cont_prod_nutrient_raster,
+            args=(
+                poll_serv_nutrient_1d_path,
+                tot_prod_nut_1d_path,
+                cont_prod_nutrient_1d_path),
+            target_path_list=[cont_prod_nutrient_1d_path],
+            dependent_task_list=[
+                poll_serv_nutrient_task, tot_prod_nutrient_task],
+            task_name=f'cont prod {nutrient_name}',
             priority=100)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
@@ -595,7 +610,7 @@ def _make_logger_callback(message):
     return logger_callback
 
 
-def create_prod_nutrient_1d_raster(
+def create_prod_nutrient_raster(
         crop_nutrient_df_path, nutrient_name, yield_raster_dir,
         consider_pollination, target_production_path):
     """Create total production yield for a nutrient for all crops.
@@ -672,6 +687,51 @@ def create_prod_nutrient_1d_raster(
     pygeoprocessing.raster_calculator(
         [y_ha_column] + yield_raster_path_band_list, production_op,
         target_production_path, gdal.GDT_Float32, yield_nodata)
+
+
+def create_cont_prod_nutrient_raster(
+        poll_serv_nutrient_path, tot_prod_nut_path,
+        target_cont_prod_nutrient_path):
+    """Calculate proportion of poll_serv to tot_prod
+
+    Contribution of wild pollination to total annual micronutrient production,
+    as a proportion of nutrient.
+
+    Parameters:
+        poll_serv_nutrient_path (string): path to pollination service
+            raster (portion of nutrient production that is pollinator
+            dependent).
+        tot_prod_nut_path (string): path to total nutrient production.
+        target_cont_prod_nutrient_path (string): path to target file that
+            will calculate the proportion of pollinator production to total
+            production. If any production is 0, the value will be 0.
+
+    Returns:
+        None.
+
+    """
+    poll_serv_nodata = pygeoprocessing.get_raster_info(
+        poll_serv_nutrient_path)['nodata'][0]
+    tot_prod_nodata = pygeoprocessing.get_raster_info(
+        tot_prod_nut_path)['nodata'][0]
+    target_nodata = -1.
+
+    def calc_proportion(poll_serv_array, tot_prod_array):
+        result = numpy.empty_like(poll_serv_array)
+        result[:] = target_nodata
+        zero_mask = tot_prod_array == 0
+        valid_mask = (
+            tot_prod_array != tot_prod_nodata) & (
+            poll_serv_array != poll_serv_nodata) & ~zero_mask
+        result[zero_mask] = 0.0
+        result[valid_mask] = (
+            poll_serv_array[valid_mask] / tot_prod_array[valid_mask])
+        return result
+
+    pygeoprocessing.raster_calculator(
+        [(poll_serv_nutrient_path, 1), (tot_prod_nut_path, 1)],
+        calc_proportion, target_cont_prod_nutrient_path, gdal.GDT_Float32,
+        target_nodata)
 
 
 def area_of_pixel(pixel_size, center_lat):

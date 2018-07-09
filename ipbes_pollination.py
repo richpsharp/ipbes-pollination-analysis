@@ -345,6 +345,7 @@ def main():
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
         # and folate (mg/yr)
+        cont_prod_nutrient_task_path_list = []
         for nutrient_id in ['en', 'va', 'fo']:
             tot_prod_task, tot_prod_path = (
                 nut_task_path_tot_prod_map[nutrient_id])
@@ -453,6 +454,8 @@ def main():
                 task_name=(
                     f'cont_poll_serv_prod_{nutrient_id}_10s_'
                     f'{landcover_short_suffix}.tif'))
+            cont_prod_nutrient_task_path_list.append(
+                (cont_prod_task, target_cont_prod_nutrient_path))
 
             _ = task_graph.add_task(
                 func=build_overviews,
@@ -467,6 +470,28 @@ def main():
         # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
         # average contribution of wild pollination to total annual
         # micronutrient production, across all three nutrients
+        cont_prod_avg_10s_path = os.path.join(
+            WORKING_DIR, 'main_outputs',
+            f'cont_prod_avg_10s_{landcover_short_suffix}.tif')
+        cont_prod_avg_task = task_graph.add_task(
+            func=create_avg_raster,
+            args=(
+                [task_path_tuple[1] for task_path_tuple in
+                 cont_prod_nutrient_task_path_list], cont_prod_avg_10s_path),
+            target_path_list=[cont_prod_avg_10s_path],
+            dependent_task_list=(
+                [task_path_tuple[0] for task_path_tuple in
+                 cont_prod_nutrient_task_path_list]),
+            task_name=f'cont_prod_avg_10s_{landcover_short_suffix}')
+
+        _ = task_graph.add_task(
+            func=build_overviews,
+            priority=-100,
+            args=(cont_prod_nutrient_task_path_list, 'average'),
+            target_path_list=[f'{cont_prod_nutrient_task_path_list}.ovr'],
+            dependent_task_list=[cont_prod_avg_task],
+            task_name=('compress' + os.path.basename(
+                cont_prod_nutrient_task_path_list)))
 
         # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
 

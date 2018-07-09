@@ -47,6 +47,7 @@ WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
 N_WORKERS = 4
+DELAYED_START = N_WORKERS >= 0
 
 
 def main():
@@ -54,7 +55,7 @@ def main():
     reproduce_env = reproduce.Reproduce(WORKING_DIR)
     LOGGER.debug(reproduce_env['CACHE_DIR'])
     task_graph = taskgraph.TaskGraph(
-        reproduce_env['CACHE_DIR'], N_WORKERS, delayed_start=True,
+        reproduce_env['CACHE_DIR'], N_WORKERS, delayed_start=DELAYED_START,
         reporting_interval=5.0)
 
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
@@ -116,7 +117,8 @@ def main():
             yield_zip_url, GOOGLE_BUCKET_KEY_PATH,
             yield_zip_path),
         target_path_list=[yield_zip_path],
-        task_name=f'fetch {os.path.basename(yield_zip_path)}')
+        task_name=f'fetch {os.path.basename(yield_zip_path)}',
+        skip_if_target_exists=True)
 
     zip_touch_file_path = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield.txt')
@@ -127,7 +129,8 @@ def main():
             zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
         dependent_task_list=[yield_zip_fetch_task],
-        task_name=f'unzip monfreda_2008_observed_yield')
+        task_name=f'unzip monfreda_2008_observed_yield',
+        skip_if_target_exists=True)
 
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
@@ -228,7 +231,8 @@ def main():
             func=google_bucket_fetch_and_validate,
             args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
             target_path_list=[landcover_path],
-            task_name=f'fetch {landcover_key}')
+            task_name=f'fetch {landcover_key}',
+            skip_if_target_exists=True)
 
         _ = task_graph.add_task(
             func=build_overviews,
@@ -236,7 +240,8 @@ def main():
             args=(landcover_path, 'mode'),
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
-            task_name=f'compress {os.path.basename(landcover_path)}')
+            task_name=f'compress {os.path.basename(landcover_path)}',
+            skip_if_target_exists=True)
 
         for mask_prefix, globio_codes in [
                 ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
@@ -286,7 +291,8 @@ def main():
             target_path_list=[proportional_hab_area_2km_path],
             task_name=(
                 'calculate proportional'
-                f' {os.path.basename(proportional_hab_area_2km_path)}'))
+                f' {os.path.basename(proportional_hab_area_2km_path)}'),
+            skip_if_target_exists=True)
 
         _ = task_graph.add_task(
             func=build_overviews,
@@ -297,8 +303,8 @@ def main():
             dependent_task_list=[prop_hab_area_2km_task],
             task_name=(
                 'compress '
-                f'{os.path.basename(proportional_hab_area_2km_path)}',
-            ))
+                f'{os.path.basename(proportional_hab_area_2km_path)}'),
+            skip_if_target_exists=True)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
         #  evaluate whether there was sufficient pollinator habitat in the 2
@@ -314,7 +320,7 @@ def main():
         threshold_val = 0.3
         poll_suff_path = os.path.join(
             WORKING_DIR, 'main_outputs',
-            f'poll_suff_{landcover_short_suffix}.tif')
+            f'poll_suff_10s_{landcover_short_suffix}.tif')
         poll_suff_task = task_graph.add_task(
             func=threshold_select_raster,
             args=(
@@ -348,7 +354,7 @@ def main():
                 f'tot_prod_{nutrient_id}_1d_{landcover_short_suffix}.tif')
 
             tot_prod_nut_scenario_task = task_graph.add_task(
-                func=mask_raster,
+                func=mult_rasters,
                 args=(
                     ag_task_path_tuple[1], tot_prod_path,
                     tot_prod_nut_scenario_path),
@@ -374,7 +380,7 @@ def main():
                 f'poll_dep_prod_{nutrient_id}_1d_{landcover_short_suffix}.tif')
 
             poll_dep_prod_nut_scenario_task = task_graph.add_task(
-                func=mask_raster,
+                func=mult_rasters,
                 args=(
                     ag_task_path_tuple[1], poll_dep_prod_path,
                     poll_dep_prod_nut_scenario_path),
@@ -404,13 +410,13 @@ def main():
                 f'{landcover_short_suffix}.tif')
 
             poll_serv_prod_nut_scenario_task = task_graph.add_task(
-                func=mask_raster,
+                func=mult_rasters,
                 args=(
-                    hab_task_path_tuple[1], poll_suff_path,
+                    poll_dep_prod_nut_scenario_path, poll_suff_path,
                     poll_serv_prod_nut_scenario_path),
                 target_path_list=[poll_serv_prod_nut_scenario_path],
                 dependent_task_list=[
-                    poll_suff_task, hab_task_path_tuple[0]],
+                    poll_suff_task, poll_dep_prod_nut_scenario_task],
                 task_name=(
                     f'poll_serv_prod_{nutrient_id}_'
                     f'1d{landcover_short_suffix}'))
@@ -923,6 +929,28 @@ def area_of_pixel(pixel_size, center_lat):
                 numpy.log(zp/zm) / (2*e) +
                 numpy.sin(numpy.radians(f)) / (zp*zm)))
     return pixel_size / 360. * (area_list[0]-area_list[1])
+
+
+def _mult_raster_op(array_a, array_b, nodata_a, nodata_b, target_nodata):
+    """Multiply a by b and skip nodata."""
+    result = numpy.empty_like(array_a)
+    result[:] = target_nodata
+    valid_mask = (array_a != nodata_a) & (array_b != nodata_b)
+    result[valid_mask] = array_a[valid_mask] * array_b[valid_mask]
+    return result
+
+
+def mult_rasters(raster_a_path, raster_b_path, target_path):
+    """Multiply a by b and skip nodata."""
+    nodata_a = pygeoprocessing.get_raster_info(raster_a_path)['nodata'][0]
+    nodata_b = pygeoprocessing.get_raster_info(raster_b_path)['nodata'][0]
+
+    target_nodata = -1.0
+    pygeoprocessing.raster_calculator(
+        [(raster_a_path, 1), (raster_b_path, 1), nodata_a, nodata_b,
+         target_nodata], _mult_raster_op, target_path, gdal.GDT_Float32,
+         target_nodata)
+
 
 
 if __name__ == '__main__':

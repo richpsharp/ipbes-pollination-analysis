@@ -10,6 +10,7 @@ import time
 import os
 import re
 import logging
+import tempfile
 
 import google.cloud.client
 import google.cloud.storage
@@ -93,6 +94,45 @@ def main():
         target_path_list=[crop_nutrient_table_path],
         task_name=f'fetch {os.path.basename(crop_nutrient_table_path)}')
 
+    landcover_data = {
+        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP5_RCP85_'
+            'md5_1b3cc1ce6d0ff14d66da676ef194f130.tif', 'ssp5'),
+        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_'
+            '803166420f51e5ef7dcaa970faa98173.tif', 'ssp1'),
+        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_'
+            'e77077a3220a36f7f0441bbd0f7f14ab.tif', 'ssp3'),
+        'Globio4_landuse_10sec_1850': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1850_md5_'
+            '0b7fcb4b180d46b4fc2245beee76d6b9.tif', '1850'),
+        'Globio4_landuse_10sec_2015': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_2015_md5_'
+            '939a57c2437cd09bd5a9eb472b9bd781.tif', 'cur'),
+        'Globio4_landuse_10sec_1980': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1980_md5_'
+            'f6384eac7579318524439df9530ca1f4.tif', '1980'),
+        'Globio4_landuse_10sec_1945': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1945_md5_'
+            '52c7b4c38c26defefa61132fd25c5584.tif', '1945'),
+        'Globio4_landuse_10sec_1910': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1910_md5_'
+            'e7da8fa29db305ff63c99fed7ca8d5e2.tif', '1910'),
+        'Globio4_landuse_10sec_1900': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1900_md5_'
+            'f5db818a5b16799bf2cb627e574120a4.tif', '1900'),
+        }
+
     # 1.2.3.  Crop production
 
     # Spatially-explicit global crop yields (tons/ha) at 5 arc min (~10 km)
@@ -132,10 +172,22 @@ def main():
         task_name=f'unzip monfreda_2008_observed_yield',
         skip_if_target_exists=True)
 
+    # fetch a landcover map to use as a base for the dimensions of the
+    # production raster
+    landcover_key, (landcover_url, _) = next(iter(landcover_data))
+    landcover_env_path = f'landcover/{os.path.basename(landcover_url)}'
+    landcover_path = reproduce_env.predict_path(landcover_env_path)
+    landcover_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
+        target_path_list=[landcover_path],
+        task_name=f'fetch {landcover_key}',
+        skip_if_target_exists=True)
+
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
 
-    nut_task_path_tot_prod_map = {}
+    nut_task_path_tot_prod_1d_map = {}
     nut_task_path_poll_dep_prod_map = {}
     for nutrient_id, nutrient_name in [
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
@@ -143,17 +195,18 @@ def main():
         tot_prod_nut_10s_path = os.path.join(
             WORKING_DIR, 'total_nutrient_rasters',
             f'tot_prod_{nutrient_id}_10s.tif')
-        tot_prod_nut_10s_task = task_graph.add_task(
+        tot_prod_nut_1d_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
-                False, tot_prod_nut_10s_path),
+                False, landcover_path, tot_prod_nut_10s_path),
             target_path_list=[tot_prod_nut_10s_path],
             dependent_task_list=[
-                unzip_yield_task, crop_nutrient_table_fetch_task],
+                unzip_yield_task, crop_nutrient_table_fetch_task,
+                landcover_fetch_task],
             task_name=f'total nut prod {nutrient_name}')
-        nut_task_path_tot_prod_map[nutrient_id] = (
-            tot_prod_nut_10s_task, tot_prod_nut_10s_path)
+        nut_task_path_tot_prod_1d_map[nutrient_id] = (
+            tot_prod_nut_1d_task, tot_prod_nut_10s_path)
 
         # pollination-dependent annual production of nutrient
         poll_dep_prod_nut_10s_path = os.path.join(
@@ -163,7 +216,7 @@ def main():
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name, yield_raster_dir,
-                True, poll_dep_prod_nut_10s_path),
+                True, landcover_path, poll_dep_prod_nut_10s_path),
             target_path_list=[poll_dep_prod_nut_10s_path],
             dependent_task_list=[unzip_yield_task],
             task_name=f'total pol serv {nutrient_name}')
@@ -182,45 +235,6 @@ def main():
         args=(0.00277778, 2000., kernel_raster_path),
         target_path_list=[kernel_raster_path],
         task_name='make convolution kernel')
-
-    landcover_data = {
-        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/GLOBIO4_LU_10sec_2050_SSP5_RCP85_'
-            'md5_1b3cc1ce6d0ff14d66da676ef194f130.tif', 'ssp5'),
-        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_'
-            '803166420f51e5ef7dcaa970faa98173.tif', 'ssp1'),
-        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_'
-            'e77077a3220a36f7f0441bbd0f7f14ab.tif', 'ssp3'),
-        'Globio4_landuse_10sec_1850': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/Globio4_landuse_10sec_1850_md5_'
-            '0b7fcb4b180d46b4fc2245beee76d6b9.tif', '1850'),
-        'Globio4_landuse_10sec_2015': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/Globio4_landuse_10sec_2015_md5_'
-            '939a57c2437cd09bd5a9eb472b9bd781.tif', 'cur'),
-        'Globio4_landuse_10sec_1980': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/Globio4_landuse_10sec_1980_md5_'
-            'f6384eac7579318524439df9530ca1f4.tif', '1980'),
-        'Globio4_landuse_10sec_1945': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/Globio4_landuse_10sec_1945_md5_'
-            '52c7b4c38c26defefa61132fd25c5584.tif', '1945'),
-        'Globio4_landuse_10sec_1910': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/Globio4_landuse_10sec_1910_md5_'
-            'e7da8fa29db305ff63c99fed7ca8d5e2.tif', '1910'),
-        'Globio4_landuse_10sec_1900': (
-            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-            '/Globio4_landuse_10sec_1900_md5_'
-            'f5db818a5b16799bf2cb627e574120a4.tif', '1900'),
-        }
 
     # mask landcover into agriculture and pollinator habitat
     for landcover_key, (landcover_url, landcover_short_suffix) in (
@@ -347,8 +361,8 @@ def main():
         # and folate (mg/yr)
         cont_prod_nutrient_task_path_list = []
         for nutrient_id in ['en', 'va', 'fo']:
-            tot_prod_task, tot_prod_path = (
-                nut_task_path_tot_prod_map[nutrient_id])
+            tot_prod_task, tot_prod_1d_path = (
+                nut_task_path_tot_prod_1d_map[nutrient_id])
 
             tot_prod_nut_scenario_path = os.path.join(
                 WORKING_DIR, 'main_outputs',
@@ -357,7 +371,7 @@ def main():
             tot_prod_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
-                    ag_task_path_tuple[1], tot_prod_path,
+                    ag_task_path_tuple[1], tot_prod_1d_path,
                     tot_prod_nut_scenario_path),
                 target_path_list=[tot_prod_nut_scenario_path],
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
@@ -493,7 +507,7 @@ def main():
             task_name=('compress' + os.path.basename(
                 cont_prod_nutrient_task_path_list)))
 
-        # c_ cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
+        # c_cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -799,7 +813,8 @@ def _make_logger_callback(message):
 
 def create_prod_nutrient_raster(
         crop_nutrient_df_path, nutrient_name, yield_raster_dir,
-        consider_pollination, target_production_path):
+        consider_pollination, sample_target_raster_path,
+        target_production_path):
     """Create total production yield for a nutrient for all crops.
 
     Parameters:
@@ -813,6 +828,8 @@ def create_prod_nutrient_raster(
             in the `filenm` column of `crop_nutrient_df`.
         consider_pollination (bool): if True, multiply yields by pollinator
             dependence ratio.
+        sample_target_raster_path (path): path to a file that has the raster
+            pixel size and dimensions of the desired `target_production_path`.
         target_production_path (str): path to target raster that will contain
             a per-pixel amount of pollinator produced `nutrient_name`
             calculated as the sum(
@@ -824,14 +841,13 @@ def create_prod_nutrient_raster(
 
     """
     crop_nutrient_df = pandas.read_csv(crop_nutrient_df_path)
-    yield_raster_path_band_list = []
+    yield_raster_path_list = []
     pollination_yield_factor_list = []
     for _, row in crop_nutrient_df.iterrows():
         yield_raster_path = os.path.join(
             yield_raster_dir, f"{row['filenm']}_yield_map.tif")
         if os.path.exists(yield_raster_path):
-            yield_raster_path_band_list.append(
-                (yield_raster_path, 1))
+            yield_raster_path_list.append(yield_raster_path)
             pollination_yield_factor_list.append(
                 (1. - row['Percent refuse'] / 100.) * row[nutrient_name])
             if consider_pollination:
@@ -840,8 +856,24 @@ def create_prod_nutrient_raster(
         else:
             raise ValueError(f"not found {yield_raster_path}")
 
+    temp_working_dir = tempfile.mkdtemp(
+        dir=os.path.dirname(target_production_path))
+
+    resampled_yield_raster_path_list = [os.path.join(
+        temp_working_dir, os.path.basename(path))
+        for path in yield_raster_path_list]
+
+    sample_target_raster_info = pygeoprocessing.get_raster_info(
+        sample_target_raster_path)
+
+    pygeoprocessing.align_and_resize_raster_stack(
+        yield_raster_path_list,
+        resampled_yield_raster_path_list,
+        sample_target_raster_info['pixel_size'],
+        sample_target_raster_info['bounding_box'])
+
     yield_raster_info = pygeoprocessing.get_raster_info(
-        yield_raster_path_band_list[0][0])
+        resampled_yield_raster_path_list[0])
     y_lat_array = numpy.linspace(
         yield_raster_info['geotransform'][3],
         yield_raster_info['geotransform'][3] +
@@ -872,8 +904,8 @@ def create_prod_nutrient_raster(
         return result
 
     pygeoprocessing.raster_calculator(
-        [y_ha_column] + yield_raster_path_band_list, production_op,
-        target_production_path, gdal.GDT_Float32, yield_nodata)
+        [y_ha_column] + [(x, 1) for x in resampled_yield_raster_path_list],
+        production_op, target_production_path, gdal.GDT_Float32, yield_nodata)
 
 
 def create_cont_prod_nutrient_raster(
@@ -1002,8 +1034,7 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
     pygeoprocessing.raster_calculator(
         [(raster_a_path, 1), (raster_b_path, 1), nodata_a, nodata_b,
          target_nodata], _mult_raster_op, target_path, gdal.GDT_Float32,
-         target_nodata)
-
+        target_nodata)
 
 
 if __name__ == '__main__':

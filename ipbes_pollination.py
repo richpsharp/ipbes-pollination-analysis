@@ -236,7 +236,7 @@ def main():
 
         _ = task_graph.add_task(
             func=build_overviews,
-            priority=100,
+            priority=-100,
             args=(landcover_path, 'mode'),
             target_path_list=[f'{landcover_path}.ovr'],
             dependent_task_list=[landcover_fetch_task],
@@ -261,7 +261,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
-                priority=100,
+                priority=-100,
                 args=(mask_target_path, 'mode'),
                 target_path_list=[
                     f'{mask_target_path}.ovr'],
@@ -296,7 +296,7 @@ def main():
 
         _ = task_graph.add_task(
             func=build_overviews,
-            priority=100,
+            priority=-100,
             args=(proportional_hab_area_2km_path, 'average'),
             target_path_list=[
                 f'{proportional_hab_area_2km_path}.ovr'],
@@ -334,7 +334,7 @@ def main():
 
         _ = task_graph.add_task(
             func=build_overviews,
-            priority=100,
+            priority=-100,
             args=(poll_suff_path, 'mode'),
             target_path_list=[
                 f'{poll_suff_path}.ovr'],
@@ -365,7 +365,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
-                priority=100,
+                priority=-100,
                 args=(tot_prod_nut_scenario_path, 'average'),
                 target_path_list=[f'{tot_prod_nut_scenario_path}.ovr'],
                 dependent_task_list=[tot_prod_nut_scenario_task],
@@ -393,7 +393,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
-                priority=100,
+                priority=-100,
                 args=(poll_dep_prod_nut_scenario_path, 'average'),
                 target_path_list=[f'{poll_dep_prod_nut_scenario_path}.ovr'],
                 dependent_task_list=[poll_dep_prod_nut_scenario_task],
@@ -423,7 +423,7 @@ def main():
 
             _ = task_graph.add_task(
                 func=build_overviews,
-                priority=100,
+                priority=-100,
                 args=(poll_serv_prod_nut_scenario_path, 'average'),
                 target_path_list=[f'{poll_serv_prod_nut_scenario_path}.ovr'],
                 dependent_task_list=[poll_serv_prod_nut_scenario_task],

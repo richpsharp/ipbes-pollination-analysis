@@ -165,7 +165,7 @@ def main():
             dependent_task_list=[unzip_yield_task],
             task_name=f'total pol serv {nutrient_name}')
         nut_task_path_poll_dep_prod_map[nutrient_id] = (
-            poll_dep_prod_nut_1d_path, poll_dep_prod_nut_1d_task)
+            poll_dep_prod_nut_1d_task, poll_dep_prod_nut_1d_path)
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and

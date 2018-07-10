@@ -551,6 +551,32 @@ def main():
         'Spatial_population_scenarios_GeoTIFF_'
         'md5_1c4b6d87cb9a167585e1fc49914248fd.zip')
 
+    spatial_population_scenarios_path = os.path.join(
+        reproduce_env['DATA_DIR'], 'spatial_population_scenarios',
+        os.path.basename(spatial_population_scenarios_url))
+
+    spatial_population_scenarios_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            spatial_population_scenarios_url, GOOGLE_BUCKET_KEY_PATH,
+            spatial_population_scenarios_path),
+        target_path_list=[spatial_population_scenarios_path],
+        task_name=f"""fetch {os.path.basename(
+            spatial_population_scenarios_path)}""")
+
+    spatial_scenarios_pop_zip_touch_file_path = os.path.join(
+        os.path.dirname(yield_zip_path),
+        'Spatial_population_scenarios_GeoTIFF.txt')
+    unzip_spatial_population_scenarios_task = task_graph.add_task(
+        func=unzip_file,
+        args=(
+            yield_zip_path, os.path.dirname(yield_zip_path),
+            spatial_scenarios_pop_zip_touch_file_path),
+        target_path_list=[spatial_scenarios_pop_zip_touch_file_path],
+        dependent_task_list=[spatial_population_scenarios_fetch_task],
+        task_name=f'unzip Spatial_population_scenarios_GeoTIFF',
+        skip_if_target_exists=True)
+
     task_graph.close()
     task_graph.join()
 

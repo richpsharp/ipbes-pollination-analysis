@@ -503,33 +503,33 @@ def main():
                     target_cont_prod_nutrient_path)))
 
         # TODO:
-        # cont_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
+        # cont_poll_serv_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
         # average contribution of wild pollination to total annual
         # micronutrient production, across all three nutrients
-        cont_prod_avg_10s_path = os.path.join(
+        cont_poll_serv_prod_avg_10s_path = os.path.join(
             WORKING_DIR, 'main_outputs',
-            f'cont_prod_avg_10s_{landcover_short_suffix}.tif')
-        cont_prod_avg_task = task_graph.add_task(
+            f'cont_poll_serv_prod_avg_10s_{landcover_short_suffix}.tif')
+        cont_poll_serv_prod_avg_task = task_graph.add_task(
             func=create_avg_raster,
             args=(
                 [task_path_tuple[1] for task_path_tuple in
-                 cont_prod_nutrient_task_path_list], cont_prod_avg_10s_path),
-            target_path_list=[cont_prod_avg_10s_path],
+                 cont_prod_nutrient_task_path_list], cont_poll_serv_prod_avg_10s_path),
+            target_path_list=[cont_poll_serv_prod_avg_10s_path],
             dependent_task_list=(
                 [task_path_tuple[0] for task_path_tuple in
                  cont_prod_nutrient_task_path_list]),
-            task_name=f'cont_prod_avg_10s_{landcover_short_suffix}')
+            task_name=f'cont_poll_serv_prod_avg_10s_{landcover_short_suffix}')
 
         _ = task_graph.add_task(
             func=build_overviews,
             priority=-100,
-            args=(cont_prod_avg_10s_path, 'average'),
-            target_path_list=[f'{cont_prod_avg_10s_path}.ovr'],
-            dependent_task_list=[cont_prod_avg_task],
+            args=(cont_poll_serv_prod_avg_10s_path, 'average'),
+            target_path_list=[f'{cont_poll_serv_prod_avg_10s_path}.ovr'],
+            dependent_task_list=[cont_poll_serv_prod_avg_task],
             task_name=('compress' + os.path.basename(
-                cont_prod_avg_10s_path)))
+                cont_poll_serv_prod_avg_10s_path)))
 
-        # c_cont_prod_avg_10s|1d_ssp1|ssp3|ssp5
+        # c_cont_poll_serv_prod_avg_10s|1d_ssp1|ssp3|ssp5
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -573,12 +573,13 @@ def main():
         priority=100)
 
     spatial_scenarios_pop_zip_touch_file_path = os.path.join(
-        os.path.dirname(yield_zip_path),
+        os.path.dirname(spatial_population_scenarios_path),
         'Spatial_population_scenarios_GeoTIFF.txt')
     unzip_spatial_population_scenarios_task = task_graph.add_task(
         func=unzip_file,
         args=(
-            yield_zip_path, os.path.dirname(yield_zip_path),
+            spatial_population_scenarios_path,
+            os.path.dirname(spatial_population_scenarios_path),
             spatial_scenarios_pop_zip_touch_file_path),
         target_path_list=[spatial_scenarios_pop_zip_touch_file_path],
         dependent_task_list=[spatial_population_scenarios_fetch_task],

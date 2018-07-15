@@ -202,12 +202,22 @@ def main():
             WORKING_DIR, 'total_nutrient_rasters',
             f'tot_prod_{nutrient_id}_10s.tif')
 
-        nut_task_path_tot_prod_1d_map[nutrient_id] = (
-            create_prod_nutrient_raster(
-                task_graph, crop_nutrient_table_path, nutrient_name,
-                yield_raster_dir, False, landcover_path,
+        nut_prod_task = task_graph.add_task(
+            func=create_prod_nutrient_raster,
+            args=(
+                 crop_nutrient_table_path, nutrient_name,
+                 yield_raster_dir, False, landcover_path,
+                 tot_yield_nut_10km_path, tot_yield_nut_10s_path,
+                 tot_prod_nut_10s_path),
+            target_path_list=[
                 tot_yield_nut_10km_path, tot_yield_nut_10s_path,
-                tot_prod_nut_10s_path))
+                tot_prod_nut_10s_path],
+            dependent_task_list=[landcover_fetch_task],
+            task_name=f"""create prod raster {
+                os.path.basename(tot_prod_nut_10s_path)}""")
+
+        nut_task_path_tot_prod_1d_map[nutrient_id] = (
+            nut_prod_task, tot_prod_nut_10s_path)
 
         # pollination-dependent annual production of nutrient
         poll_dep_yield_nut_10km_path = os.path.join(
@@ -219,12 +229,21 @@ def main():
         poll_dep_prod_nut_10s_path = os.path.join(
             WORKING_DIR, 'total_poll_dependent_production',
             f'poll_dep_prod_{nutrient_id}_10s.tif')
-        nut_task_path_poll_dep_prod_map[nutrient_id] = (
-            create_prod_nutrient_raster(
-                task_graph, crop_nutrient_table_path, nutrient_name,
+        pol_dep_prod_task = task_graph.add_task(
+            func=create_prod_nutrient_raster,
+            args=(
+                crop_nutrient_table_path, nutrient_name,
                 yield_raster_dir, True, landcover_path,
                 poll_dep_yield_nut_10km_path, poll_dep_yield_nut_10s_path,
-                poll_dep_prod_nut_10s_path))
+                poll_dep_prod_nut_10s_path),
+            target_path_list=[
+                poll_dep_yield_nut_10km_path, poll_dep_yield_nut_10s_path,
+                poll_dep_prod_nut_10s_path],
+            dependent_task_list=[landcover_fetch_task],
+            task_name=f"""create poll dep production raster {
+                os.path.basename(poll_dep_prod_nut_10s_path)}""")
+        nut_task_path_poll_dep_prod_map[nutrient_id] = (
+            pol_dep_prod_task, poll_dep_prod_nut_10s_path)
 
     # The proportional area of natural within 2 km was calculated for every
     #  pixel of agricultural land (GLOBIO land-cover classes 2, 230, 231, and
@@ -867,17 +886,14 @@ def total_yield_op(
 def total_production_op(yield_array, y_ha_array, yield_nodata):
     """Calculate production."""
     result = numpy.empty_like(yield_array)
-    LOGGER.debug(
-        f"""result: {result}, yield_array: {yield_array}, y_ha_array {
-            y_ha_array}""")
     result[:] = 0.0
     valid_mask = yield_array != yield_nodata
-    result[valid_mask] = yield_array[valid_mask] * y_ha_array
+    result[valid_mask] = yield_array[valid_mask] * y_ha_array[valid_mask]
     return result
 
 
 def create_prod_nutrient_raster(
-        task_graph, crop_nutrient_df_path, nutrient_name, yield_raster_dir,
+        crop_nutrient_df_path, nutrient_name, yield_raster_dir,
         consider_pollination, sample_target_raster_path,
         target_10km_yield_path, target_10s_yield_path,
         target_10s_production_path):
@@ -897,6 +913,8 @@ def create_prod_nutrient_raster(
         sample_target_raster_path (path): path to a file that has the raster
             pixel size and dimensions of the desired
             `target_10s_production_path`.
+        sample_target_fetch_task (Task): must be complete before
+            `sample_target_raster_path` is available.
         target_10km_yield_path (str): path to target raster that will
             contain total yield
         target_10s_yield_path (str): path to a resampled
@@ -934,15 +952,10 @@ def create_prod_nutrient_raster(
         yield_raster_path_list[0])
     yield_nodata = yield_raster_info['nodata'][0]
 
-    target_10km_yield_task = task_graph.add_task(
-        func=pygeoprocessing.raster_calculator,
-        args=(
-            [yield_nodata, (pollination_yield_factor_list, 'raw')] +
-            [(x, 1) for x in yield_raster_path_list], total_yield_op,
-            target_10km_yield_path, gdal.GDT_Float32, yield_nodata),
-        target_path_list=[target_10km_yield_path],
-        task_name=(
-            f'total yield for {os.path.basename(target_10km_yield_path)}'))
+    pygeoprocessing.raster_calculator(
+        [yield_nodata, (pollination_yield_factor_list, 'raw')] +
+        [(x, 1) for x in yield_raster_path_list], total_yield_op,
+        target_10km_yield_path, gdal.GDT_Float32, yield_nodata),
 
     y_lat_array = numpy.linspace(
         sample_target_raster_info['geotransform'][3],
@@ -956,31 +969,15 @@ def create_prod_nutrient_raster(
         y_lat_array) / 10000.0
     y_ha_column = y_ha_array.reshape((y_ha_array.size, 1))
 
-    warp_raster_task = task_graph.add_task(
-        func=pygeoprocessing.warp_raster,
-        args=(
-            target_10km_yield_path,
-            sample_target_raster_info['pixel_size'], target_10s_yield_path,
-            'bilinear'),
-        kwargs={'target_bb': sample_target_raster_info['bounding_box']},
-        dependent_task_list=[target_10km_yield_task],
-        target_path_list=[target_10s_yield_path],
-        task_name=(
-            f'warp raster {os.path.basename(target_10s_yield_path)}'))
+    pygeoprocessing.warp_raster(
+        target_10km_yield_path,
+        sample_target_raster_info['pixel_size'], target_10s_yield_path,
+        'bilinear', target_bb=sample_target_raster_info['bounding_box'])
 
-    total_production_10s_task = task_graph.add_task(
-        func=pygeoprocessing.raster_calculator,
-        args=(
-            [(target_10s_yield_path, 1), y_ha_column, yield_nodata],
-            total_production_op, target_10s_production_path, gdal.GDT_Float32,
-            yield_nodata),
-        target_path_list=[target_10s_production_path],
-        dependent_task_list=[warp_raster_task],
-        task_name=(
-            f"""calculate total production {
-                os.path.basename(target_10s_production_path)}"""))
-
-    return total_production_10s_task, target_10s_production_path
+    pygeoprocessing.raster_calculator(
+        [(target_10s_yield_path, 1), y_ha_column, yield_nodata],
+        total_production_op, target_10s_production_path, gdal.GDT_Float32,
+        yield_nodata)
 
 
 def create_cont_prod_nutrient_raster(

@@ -1039,7 +1039,8 @@ def create_avg_raster(base_path_list, target_avg_path):
 
     """
     nodata_set = set([
-        pygeoprocessing.get_raster_info(path) for path in base_path_list])
+        pygeoprocessing.get_raster_info(path)['nodata'][0]
+        for path in base_path_list])
     assert(len(nodata_set) == 1)
     nodata = nodata_set.pop()
 

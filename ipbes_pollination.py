@@ -10,7 +10,6 @@ import time
 import os
 import re
 import logging
-import tempfile
 
 import google.cloud.client
 import google.cloud.storage
@@ -510,7 +509,8 @@ def main():
             func=create_avg_raster,
             args=(
                 [task_path_tuple[1] for task_path_tuple in
-                 cont_prod_nutrient_task_path_list], cont_poll_serv_prod_avg_10s_path),
+                 cont_prod_nutrient_task_path_list],
+                cont_poll_serv_prod_avg_10s_path),
             target_path_list=[cont_poll_serv_prod_avg_10s_path],
             dependent_task_list=(
                 [task_path_tuple[0] for task_path_tuple in
@@ -585,16 +585,15 @@ def main():
         priority=100)
 
     gpw_urls = {
-        'gpw_v4_e_a000_014bt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a000_014bt_2010_dens_30_sec_md5_f4129fcbe7a2f65fddfb378a93cc4d67.tif',
         'gpw_v4_e_a000_014ft_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a000_014ft_2010_dens_30_sec_md5_8b2871967b71534d56d2df83e413bf33.tif',
         'gpw_v4_e_a000_014mt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a000_014mt_2010_dens_30_sec_md5_8ddf234eabc0025efd5678776e2ae792.tif',
-        'gpw_v4_e_a065plusbt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a065plusbt_2010_dens_30_sec_md5_87a734bf80b87aa773734122471e2cf1.tif',
+        'gpw_v4_e_a065plusft_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a065plusft_2010_dens_30_sec_md5_c0cfbc8685dbf16cbe520aac963cd6b6.tif',
         'gpw_v4_e_a065plusmt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a065plusmt_2010_dens_30_sec_md5_1d36e79aa083ee25de7295a4a7d10a4b.tif',
-        'gpw_v4_e_atotpopbt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_atotpopbt_2010_dens_30_sec_md5_3202da812b3a98bb6df1440eaa28fead.tif',
         'gpw_v4_e_atotpopft_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_atotpopft_2010_dens_30_sec_md5_5bbb72a050c76264e1b6a3c7530fedce.tif',
         'gpw_v4_e_atotpopmt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_atotpopmt_2010_dens_30_sec_md5_31637ca784b8b917222661d4a915ead6.tif',
     }
 
+    gpw_task_path_id_map = {}
     for gpw_id, gpw_url in gpw_urls.items():
         gpw_dens_path = os.path.join(
             reproduce_env['DATA_DIR'], 'gpw_pop_densities',
@@ -614,15 +613,158 @@ def main():
             target_path_list=[gpw_count_path],
             dependent_task_list=[gpw_fetch_task],
             task_name=f"""pop count {os.path.basename(gpw_count_path)}""")
+        gpw_task_path_id_map[f'{gpw_id[:-4]}count'] = (
+            gpw_count_task, gpw_count_path)
 
+    # calculate 15-65 population gpw count by subtracting total from
+    # 0-14 and 65plus
+
+    for gender_id in ['f', 'm']:
+        gpw_v4_e_a15_65t_2010_count_path = os.path.join(
+            WORKING_DIR, 'gpw_count',
+            f'gpw_v4_e_a015_065{gender_id}_2010_count.tif')
+        gpw_15_65f_count_task = task_graph.add_task(
+            func=subtract_rasters,
+            args=(
+                gpw_task_path_id_map[
+                    f'gpw_v4_e_atotpop{gender_id}_2010_count'][1],
+                gpw_task_path_id_map[
+                    f'gpw_v4_e_a000_014{gender_id}_2010_count'][1],
+                gpw_task_path_id_map[
+                    f'gpw_v4_e_a065plus{gender_id}_2010_count'][1],
+                gpw_v4_e_a15_65t_2010_count_path),
+            target_path_list=[gpw_v4_e_a15_65t_2010_count_path],
+            dependent_task_list=[
+                gpw_task_path_id_map[
+                    f'gpw_v4_e_atotpop{gender_id}_2010_count'][0],
+                gpw_task_path_id_map[
+                    f'gpw_v4_e_a000_014{gender_id}_2010_count'][0],
+                gpw_task_path_id_map[
+                    f'gpw_v4_e_a065plus{gender_id}_2010_count'][0]],
+            task_name=f'calc gpw 15-65 {gender_id}')
+        gpw_task_path_id_map[f'gpw_v4_e_a015_065{gender_id}_2010_count'] = (
+            gpw_15_65f_count_task, gpw_v4_e_a15_65t_2010_count_path)
+
+    # TODO for Monday:
+    # 1)
     # calculate the ratios of the spatial scenarios from cur to ssp1..5
     # then multiply by the population counts to get ssp1..5 counts
 
-    # calculate gpw count
+    # we need to warp SSP rasters to match the GPW rasters
+    # we need to calcualte 15-65 pop by subtracting 0-14 and 65 plus from tot
+    # then we can calculate SSP future for 0-14, 15-65, and 65 plus
+    # then we can calculate nutritional needs for cur, and ssp scenarios
+    for ssp_id in [(1, 3, 5)]:
+        spatial_pop_dir = os.path.join(
+            os.path.dirname(spatial_population_scenarios_path),
+            'Spatial_population_scenarios_GeoTIFF',
+            f'SSP{ssp_id}_GeoTIFF', 'total', 'GeoTIFF')
+        cur_ssp_path = os.path.join(spatial_pop_dir, f'ssp{ssp_id}_2010.tif')
+        fut_ssp_path = os.path.join(spatial_pop_dir, f'ssp{ssp_id}_2050.tif')
+
+        cur_ssp_warp_path = f'{os.path.splitext(cur_ssp_path)[0]}_gpwwarp.tif'
+        fut_ssp_warp_path = f'{os.path.splitext(fut_ssp_path)[0]}_gpwwarp.tif'
+        warp_task_list = []
+        # we need a canonical base gpw raster to warp to, just grab the
+        # "first" one off the dict.
+        (gpw_base_tot_count_task, gpw_base_tot_count_path) = (
+            gpw_task_path_id_map.values().__iter__().__next__())
+        for base_path, warp_path in [
+                (cur_ssp_path, cur_ssp_warp_path),
+                (fut_ssp_path, fut_ssp_warp_path)]:
+            warp_task = task_graph.add_task(
+                func=warp_to_raster,
+                args=(
+                    base_path, gpw_base_tot_count_path, 'linear', warp_path),
+                dependent_task_list=[
+                    gpw_base_tot_count_task,
+                    unzip_spatial_population_scenarios_task],
+                target_path_list=[warp_path])
+            warp_task_list.append(warp_task)
+
+        for gpw_id in [
+                'gpw_v4_e_a000_014ft_2010_count',
+                'gpw_v4_e_a000_014mt_2010_count',
+                'gpw_v4_e_a065plusft_2010_count',
+                'gpw_v4_e_a065plusmt_2010_count',
+                'gpw_v4_e_a015_065f_2010_count',
+                'gpw_v4_e_a015_065m_2010_count',
+                ]:
+
+            gpw_task, gpw_tot_count_path = (
+                gpw_task_path_id_map[gpw_id])
+            ssp_pop_path = os.path.join(
+                WORKING_DIR, 'gpw_ssp_rasters', f'ssp{ssp_id}_{gpw_id}.tif')
+
+            task_graph.add_task(
+                func=calculate_future_pop,
+                args=(
+                    cur_ssp_warp_path, fut_ssp_warp_path, gpw_tot_count_path,
+                    ssp_pop_path),
+                dependent_task_list=warp_task_list,
+                target_path_list=[ssp_pop_path, gpw_tot_count_path],
+                task_name=f'ssp pop {os.path.basename(ssp_pop_path)}')
+
+    # 2)
+    # calcualte the total nutritional needs per pixel for cur ssp1..5 scenario
 
     task_graph.close()
     task_graph.join()
     # END MAIN
+
+
+def warp_to_raster(
+        base_raster_path, canonical_raster_path, resample_method,
+        target_raster_path):
+    """Warp base raster to canonical example.
+
+    Parameters:
+        base_raster_path (str): path to base raster
+        canonical_raster_path (str),
+        resample_method (str): 'near' or 'linear'.
+        target_raster_path (str): path to target warped raster.
+
+    Returns:
+        None.
+
+    """
+    canonical_raster_info = pygeoprocessing.get_raster_info(
+        canonical_raster_path)
+    pygeoprocessing.warp_raster(
+        base_raster_path, canonical_raster_info['pixel_size'],
+        target_raster_path,
+        resample_method, target_bb=canonical_raster_info['bounding_box'])
+
+def _future_pop_op(
+        cur_array, fut_array, count_array, ssp_nodata, count_nodata,
+        target_nodata):
+    """Calculate future pop by dividing fut/cur*cur_count."""
+    result = numpy.empty_like(cur_array)
+    result[:] = count_nodata
+    valid_mask = (
+        (cur_array != ssp_nodata) &
+        (fut_array != ssp_nodata) &
+        (count_array != count_nodata))
+    result[valid_mask] = (
+        (fut_array[valid_mask] / cur_array[valid_mask]) *
+        count_array[valid_mask])
+    return result
+
+
+def calculate_future_pop(
+        cur_ssp_path, fut_ssp_path, gpw_tot_count_path, target_ssp_pop_path):
+    """Calculate future population raster.
+
+    Multiply `gpw_tot_count` by the fut_ssp/cur_ssp ratio.
+    """
+    target_nodata = -1
+    ssp_nodata = pygeoprocessing.get_raster_info(cur_ssp_path)['nodata'][0]
+    count_nodata = pygeoprocessing.get_raster_info(
+        gpw_tot_count_path)['nodata'][0]
+    pygeoprocessing.raster_calculator(
+        [(cur_ssp_path, 1), (fut_ssp_path, 1), (gpw_tot_count_path, 1),
+         ssp_nodata, count_nodata, target_nodata], _future_pop_op,
+        target_ssp_pop_path)
 
 
 def calc_pop_count(gpw_dens_path, gpw_count_path):
@@ -943,7 +1085,7 @@ def total_yield_op(
 def density_to_value_op(density_array, y_ha_array, density_nodata):
     """Calculate production."""
     result = numpy.empty_like(density_array)
-    result[:] = 0.0
+    result[:] = density_nodata
     valid_mask = density_array != density_nodata
     result[valid_mask] = density_array[valid_mask] * y_ha_array[valid_mask]
     return result

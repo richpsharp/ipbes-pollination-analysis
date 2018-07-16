@@ -468,11 +468,9 @@ def main():
                 task_name=('compress' + os.path.basename(
                     poll_serv_prod_nut_scenario_path)))
 
-            # TODO:
             # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
             # contribution of wild pollination to total annual micronutrient
             # production, as a proportion of total energy, vitamin or folate
-
             target_cont_prod_nutrient_path = os.path.join(
                 WORKING_DIR, 'main_outputs',
                 f'cont_poll_serv_prod_{nutrient_id}_10s_'
@@ -502,7 +500,6 @@ def main():
                 task_name=('compress' + os.path.basename(
                     target_cont_prod_nutrient_path)))
 
-        # TODO:
         # cont_poll_serv_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
         # average contribution of wild pollination to total annual
         # micronutrient production, across all three nutrients
@@ -587,8 +584,67 @@ def main():
         skip_if_target_exists=True,
         priority=100)
 
+    gpw_urls = {
+        'gpw_v4_e_a000_014bt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a000_014bt_2010_dens_30_sec_md5_f4129fcbe7a2f65fddfb378a93cc4d67.tif',
+        'gpw_v4_e_a000_014ft_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a000_014ft_2010_dens_30_sec_md5_8b2871967b71534d56d2df83e413bf33.tif',
+        'gpw_v4_e_a000_014mt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a000_014mt_2010_dens_30_sec_md5_8ddf234eabc0025efd5678776e2ae792.tif',
+        'gpw_v4_e_a065plusbt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a065plusbt_2010_dens_30_sec_md5_87a734bf80b87aa773734122471e2cf1.tif',
+        'gpw_v4_e_a065plusmt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_a065plusmt_2010_dens_30_sec_md5_1d36e79aa083ee25de7295a4a7d10a4b.tif',
+        'gpw_v4_e_atotpopbt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_atotpopbt_2010_dens_30_sec_md5_3202da812b3a98bb6df1440eaa28fead.tif',
+        'gpw_v4_e_atotpopft_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_atotpopft_2010_dens_30_sec_md5_5bbb72a050c76264e1b6a3c7530fedce.tif',
+        'gpw_v4_e_atotpopmt_2010_dens': 'https://storage.cloud.google.com/ecoshard-root/ipbes/gpw_v4_e_atotpopmt_2010_dens_30_sec_md5_31637ca784b8b917222661d4a915ead6.tif',
+    }
+
+    for gpw_id, gpw_url in gpw_urls.items():
+        gpw_dens_path = os.path.join(
+            reproduce_env['DATA_DIR'], 'gpw_pop_densities',
+            os.path.basename(gpw_url))
+        gpw_fetch_task = task_graph.add_task(
+            func=google_bucket_fetch_and_validate,
+            args=(gpw_url, GOOGLE_BUCKET_KEY_PATH, gpw_dens_path),
+            target_path_list=[gpw_dens_path],
+            task_name=f"""fetch {os.path.basename(gpw_dens_path)}""",
+            priority=100)
+
+        gpw_count_path = os.path.join(
+            WORKING_DIR, 'gpw_count', f"""{gpw_id[:-4]}count.tif""")
+        gpw_count_task = task_graph.add_task(
+            func=calc_pop_count,
+            args=(gpw_dens_path, gpw_count_path),
+            target_path_list=[gpw_count_path],
+            dependent_task_list=[gpw_fetch_task],
+            task_name=f"""pop count {os.path.basename(gpw_count_path)}""")
+
+    # calculate the ratios of the spatial scenarios from cur to ssp1..5
+    # then multiply by the population counts to get ssp1..5 counts
+
+    # calculate gpw count
+
     task_graph.close()
     task_graph.join()
+    # END MAIN
+
+
+def calc_pop_count(gpw_dens_path, gpw_count_path):
+    """Calculate population count from density."""
+    gpw_dens_info = pygeoprocessing.get_raster_info(gpw_dens_path)
+    y_lat_array = numpy.linspace(
+        gpw_dens_info['geotransform'][3],
+        gpw_dens_info['geotransform'][3] +
+        gpw_dens_info['geotransform'][5] *
+        gpw_dens_info['raster_size'][1],
+        gpw_dens_info['raster_size'][1])
+
+    y_ha_array = area_of_pixel(
+        abs(gpw_dens_info['geotransform'][1]),
+        y_lat_array) / 10000.0
+    y_ha_column = y_ha_array.reshape((y_ha_array.size, 1))
+
+    nodata = gpw_dens_info['nodata'][0]
+    pygeoprocessing.raster_calculator(
+        [(gpw_dens_path, 1), y_ha_column, nodata],
+        density_to_value_op, gpw_count_path, gdal.GDT_Float32,
+        nodata)
 
 
 def create_radial_convolution_mask(
@@ -884,12 +940,12 @@ def total_yield_op(
     return result
 
 
-def total_production_op(yield_array, y_ha_array, yield_nodata):
+def density_to_value_op(density_array, y_ha_array, density_nodata):
     """Calculate production."""
-    result = numpy.empty_like(yield_array)
+    result = numpy.empty_like(density_array)
     result[:] = 0.0
-    valid_mask = yield_array != yield_nodata
-    result[valid_mask] = yield_array[valid_mask] * y_ha_array[valid_mask]
+    valid_mask = density_array != density_nodata
+    result[valid_mask] = density_array[valid_mask] * y_ha_array[valid_mask]
     return result
 
 
@@ -977,7 +1033,7 @@ def create_prod_nutrient_raster(
 
     pygeoprocessing.raster_calculator(
         [(target_10s_yield_path, 1), y_ha_column, yield_nodata],
-        total_production_op, target_10s_production_path, gdal.GDT_Float32,
+        density_to_value_op, target_10s_production_path, gdal.GDT_Float32,
         yield_nodata)
 
 

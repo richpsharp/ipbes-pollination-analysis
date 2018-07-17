@@ -211,7 +211,7 @@ def main():
             target_path_list=[
                 tot_yield_nut_10km_path, tot_yield_nut_10s_path,
                 tot_prod_nut_10s_path],
-            dependent_task_list=[landcover_fetch_task],
+            dependent_task_list=[landcover_fetch_task, unzip_yield_task],
             task_name=f"""create prod raster {
                 os.path.basename(tot_prod_nut_10s_path)}""")
 
@@ -238,7 +238,7 @@ def main():
             target_path_list=[
                 poll_dep_yield_nut_10km_path, poll_dep_yield_nut_10s_path,
                 poll_dep_prod_nut_10s_path],
-            dependent_task_list=[landcover_fetch_task],
+            dependent_task_list=[landcover_fetch_task, unzip_yield_task],
             task_name=f"""create poll dep production raster {
                 os.path.basename(poll_dep_prod_nut_10s_path)}""")
         nut_task_path_poll_dep_prod_map[nutrient_id] = (
@@ -627,22 +627,22 @@ def main():
             func=subtract_rasters,
             args=(
                 gpw_task_path_id_map[
-                    f'gpw_v4_e_atotpop{gender_id}_2010_count'][1],
+                    f'gpw_v4_e_atotpop{gender_id}t_2010_count'][1],
                 gpw_task_path_id_map[
-                    f'gpw_v4_e_a000_014{gender_id}_2010_count'][1],
+                    f'gpw_v4_e_a000_014{gender_id}t_2010_count'][1],
                 gpw_task_path_id_map[
-                    f'gpw_v4_e_a065plus{gender_id}_2010_count'][1],
+                    f'gpw_v4_e_a065plus{gender_id}t_2010_count'][1],
                 gpw_v4_e_a15_65t_2010_count_path),
             target_path_list=[gpw_v4_e_a15_65t_2010_count_path],
             dependent_task_list=[
                 gpw_task_path_id_map[
-                    f'gpw_v4_e_atotpop{gender_id}_2010_count'][0],
+                    f'gpw_v4_e_atotpop{gender_id}t_2010_count'][0],
                 gpw_task_path_id_map[
-                    f'gpw_v4_e_a000_014{gender_id}_2010_count'][0],
+                    f'gpw_v4_e_a000_014{gender_id}t_2010_count'][0],
                 gpw_task_path_id_map[
-                    f'gpw_v4_e_a065plus{gender_id}_2010_count'][0]],
+                    f'gpw_v4_e_a065plus{gender_id}t_2010_count'][0]],
             task_name=f'calc gpw 15-65 {gender_id}')
-        gpw_task_path_id_map[f'gpw_v4_e_a015_065{gender_id}_2010_count'] = (
+        gpw_task_path_id_map[f'gpw_v4_e_a015_065{gender_id}t_2010_count'] = (
             gpw_15_65f_count_task, gpw_v4_e_a15_65t_2010_count_path)
 
     # TODO for Monday:
@@ -654,7 +654,7 @@ def main():
     # we need to calcualte 15-65 pop by subtracting 0-14 and 65 plus from tot
     # then we can calculate SSP future for 0-14, 15-65, and 65 plus
     # then we can calculate nutritional needs for cur, and ssp scenarios
-    for ssp_id in [(1, 3, 5)]:
+    for ssp_id in (1, 3, 5):
         spatial_pop_dir = os.path.join(
             os.path.dirname(spatial_population_scenarios_path),
             'Spatial_population_scenarios_GeoTIFF',
@@ -687,8 +687,8 @@ def main():
                 'gpw_v4_e_a000_014mt_2010_count',
                 'gpw_v4_e_a065plusft_2010_count',
                 'gpw_v4_e_a065plusmt_2010_count',
-                'gpw_v4_e_a015_065f_2010_count',
-                'gpw_v4_e_a015_065m_2010_count',
+                'gpw_v4_e_a015_065ft_2010_count',
+                'gpw_v4_e_a015_065mt_2010_count',
                 ]:
 
             gpw_task, gpw_tot_count_path = (
@@ -701,8 +701,8 @@ def main():
                 args=(
                     cur_ssp_warp_path, fut_ssp_warp_path, gpw_tot_count_path,
                     ssp_pop_path),
-                dependent_task_list=warp_task_list,
-                target_path_list=[ssp_pop_path, gpw_tot_count_path],
+                dependent_task_list=warp_task_list + [gpw_task],
+                target_path_list=[ssp_pop_path],
                 task_name=f'ssp pop {os.path.basename(ssp_pop_path)}')
 
     # 2)
@@ -711,6 +711,31 @@ def main():
     task_graph.close()
     task_graph.join()
     # END MAIN
+
+
+def subtract_rasters(
+        raster_path_a, raster_path_b, raster_path_c, target_path):
+    """Calculate target = a-b-c and ignore nodata."""
+    a_nodata = pygeoprocessing.get_raster_info(raster_path_a)['nodata'][0]
+    b_nodata = pygeoprocessing.get_raster_info(raster_path_b)['nodata'][0]
+    c_nodata = pygeoprocessing.get_raster_info(raster_path_c)['nodata'][0]
+    target_nodata = -9999
+
+    def sub_op(a_array, b_array, c_array):
+        """Sub a-b-c as arrays."""
+        result = numpy.empty_like(a_array)
+        result[:] = target_nodata
+        valid_mask = (
+            (a_array != a_nodata) &
+            (b_array != b_nodata) &
+            (c_array != c_nodata))
+        result[valid_mask] = (
+            a_array[valid_mask] - b_array[valid_mask] - c_array[valid_mask])
+        return result
+
+    pygeoprocessing.raster_calculator(
+        [(raster_path_a, 1), (raster_path_b, 1), (raster_path_c, 1)],
+        sub_op, target_path, gdal.GDT_Float32, target_nodata)
 
 
 def warp_to_raster(

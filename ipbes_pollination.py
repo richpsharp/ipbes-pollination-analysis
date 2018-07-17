@@ -654,6 +654,7 @@ def main():
     # we need to calcualte 15-65 pop by subtracting 0-14 and 65 plus from tot
     # then we can calculate SSP future for 0-14, 15-65, and 65 plus
     # then we can calculate nutritional needs for cur, and ssp scenarios
+    ssp_task_pop_map = {}
     for ssp_id in (1, 3, 5):
         spatial_pop_dir = os.path.join(
             os.path.dirname(spatial_population_scenarios_path),
@@ -697,7 +698,7 @@ def main():
             ssp_pop_path = os.path.join(
                 WORKING_DIR, 'gpw_ssp_rasters', f'ssp{ssp_id}_{gpw_id}.tif')
 
-            task_graph.add_task(
+            ssp_pop_task = task_graph.add_task(
                 func=calculate_future_pop,
                 args=(
                     cur_ssp_warp_path, fut_ssp_warp_path, gpw_tot_count_path,
@@ -706,8 +707,34 @@ def main():
                 target_path_list=[ssp_pop_path],
                 task_name=f'ssp pop {os.path.basename(ssp_pop_path)}')
 
+            ssp_task_pop_map[(ssp_id, gpw_id)] = (ssp_pop_task, ssp_pop_path)
+
     # 2)
-    # calcualte the total nutritional needs per pixel for cur ssp1..5 scenario
+    # calculate the total nutritional needs per pixel for cur ssp1..5 scenario
+    # tot_req_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
+
+    # this table comes from section "1.4.3 Dietary requirements"
+    # units are 'va': Vitamin A (mcg RE)
+    # 'fo': folate (mcg DFE)
+    # 'en': Energy (kcal)
+    nutritional_needs_map = {
+        'gpw_v4_e_a000_014ft_2010_count': {'va': 450, 'fo': 250, 'en': 1531},
+        'gpw_v4_e_a000_014mt_2010_count': {'va': 483, 'fo': 250, 'en': 1648},
+        'gpw_v4_e_a015_065ft_2010_count': {'va': 516, 'fo': 408, 'en': 2153},
+        'gpw_v4_e_a015_065mt_2010_count': {'va': 600, 'fo': 400, 'en': 2675},
+        'gpw_v4_e_a065plusft_2010_count': {'va': 500, 'fo': 400, 'en': 1876},
+        'gpw_v4_e_a065plusmt_2010_count': {'va': 600, 'fo': 400, 'en': 2318},
+    }
+    for ssp_id in (1, 3, 5):
+        ssp_task_pop_map
+        for nut_id in ('en', 'va', 'fo'):
+            task_pop_path_list = [
+                (ssp_task_pop_map[(ssp_id, gpw_id)],
+                 nutritional_needs_map[gpw_id][nut_id])
+                for gpw_id in nutritional_needs_map]
+
+            calculate_total_requirements(
+                nut_id, population_count_raster_scenario_list, target_path)
 
     task_graph.close()
     task_graph.join()

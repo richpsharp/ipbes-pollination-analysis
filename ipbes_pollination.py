@@ -778,13 +778,17 @@ def calculate_future_pop(
         """Calculate future pop by dividing fut/cur*cur_count."""
         result = numpy.empty_like(cur_array)
         result[:] = count_nodata
+        zero_mask = cur_array == 0
         valid_mask = (
             (cur_array != ssp_nodata) &
             (fut_array != ssp_nodata) &
-            (count_array != count_nodata))
+            (count_array != count_nodata) & ~zero_mask)
         result[valid_mask] = (
             (fut_array[valid_mask] / cur_array[valid_mask]) *
             count_array[valid_mask])
+        # assume if denominator is 0 we don't want to mask anything out, just
+        # get it working
+        result[zero_mask] = 1.0
         return result
 
     pygeoprocessing.raster_calculator(

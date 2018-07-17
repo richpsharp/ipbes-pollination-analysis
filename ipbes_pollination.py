@@ -467,19 +467,9 @@ def main():
                  cont_prod_nutrient_task_path_list]),
             task_name=f'cont_poll_serv_prod_avg_10s_{landcover_short_suffix}')
 
-
         schedule_build_overviews(
             task_graph, cont_poll_serv_prod_avg_10s_path,
             cont_poll_serv_prod_avg_task)
-
-        _ = task_graph.add_task(
-            func=build_overviews,
-            priority=-100,
-            args=(cont_poll_serv_prod_avg_10s_path, 'average'),
-            target_path_list=[f'{cont_poll_serv_prod_avg_10s_path}.ovr'],
-            dependent_task_list=[cont_poll_serv_prod_avg_task],
-            task_name=('compress' + os.path.basename(
-                cont_poll_serv_prod_avg_10s_path)))
 
         # c_cont_poll_serv_prod_avg_10s|1d_ssp1|ssp3|ssp5
 

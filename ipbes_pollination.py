@@ -549,6 +549,7 @@ def main():
             target_path_list=[gpw_dens_path],
             task_name=f"""fetch {os.path.basename(gpw_dens_path)}""",
             priority=100)
+        schedule_build_overviews(task_graph, gpw_dens_path, gpw_fetch_task)
 
         gpw_count_path = os.path.join(
             WORKING_DIR, 'gpw_count', f"""{gpw_id[:-4]}count.tif""")
@@ -560,6 +561,8 @@ def main():
             task_name=f"""pop count {os.path.basename(gpw_count_path)}""")
         gpw_task_path_id_map[f'{gpw_id[:-4]}count'] = (
             gpw_count_task, gpw_count_path)
+        schedule_build_overviews(task_graph, gpw_count_path, gpw_count_task)
+
 
     # calculate 15-65 population gpw count by subtracting total from
     # 0-14 and 65plus
@@ -589,6 +592,10 @@ def main():
             task_name=f'calc gpw 15-65 {gender_id}')
         gpw_task_path_id_map[f'gpw_v4_e_a015_065{gender_id}t_2010_count'] = (
             gpw_15_65f_count_task, gpw_v4_e_a15_65t_2010_count_path)
+
+        schedule_build_overviews(
+            task_graph, gpw_v4_e_a15_65t_2010_count_path,
+            gpw_15_65f_count_task)
 
     # TODO for Monday:
     # 1)
@@ -628,6 +635,7 @@ def main():
                     unzip_spatial_population_scenarios_task],
                 target_path_list=[warp_path])
             warp_task_list.append(warp_task)
+            schedule_build_overviews(task_graph, warp_path, warp_task)
 
         for gpw_id in [
                 'gpw_v4_e_a000_014ft_2010_count',
@@ -651,8 +659,8 @@ def main():
                 dependent_task_list=warp_task_list + [gpw_task],
                 target_path_list=[ssp_pop_path],
                 task_name=f'ssp pop {os.path.basename(ssp_pop_path)}')
-
             ssp_task_pop_map[(ssp_id, gpw_id)] = (ssp_pop_task, ssp_pop_path)
+            schedule_build_overviews(task_graph, ssp_pop_path, ssp_pop_task)
 
     # 2)
     # calculate the total nutritional needs per pixel for cur ssp1..5 scenario
@@ -680,7 +688,7 @@ def main():
 
         target_path = os.path.join(
             WORKING_DIR, f'tot_req_{nut_id}_10s_cur.tif')
-        task_graph.add_task(
+        total_requirements_task = task_graph.add_task(
             func=calculate_total_requirements,
             args=(
                 pop_path_list, nut_need_list, target_path),
@@ -688,6 +696,8 @@ def main():
             dependent_task_list=pop_task_list,
             task_name=f"""tot nut requirements {
                 os.path.basename(target_path)}""")
+        schedule_build_overviews(
+                task_graph, target_path, total_requirements_task)
 
         # calculate ssp needs
         for ssp_id in (1, 3, 5):
@@ -699,7 +709,7 @@ def main():
 
             target_path = os.path.join(
                 WORKING_DIR, f'tot_req_{nut_id}_10s_ssp{ssp_id}.tif')
-            task_graph.add_task(
+            total_requirements_task = task_graph.add_task(
                 func=calculate_total_requirements,
                 args=(
                     pop_path_list, nut_need_list, target_path),
@@ -707,6 +717,9 @@ def main():
                 dependent_task_list=pop_task_list,
                 task_name=f"""tot nut requirements {
                     os.path.basename(target_path)}""")
+
+            schedule_build_overviews(
+                task_graph, target_path, total_requirements_task)
 
     task_graph.close()
     task_graph.join()

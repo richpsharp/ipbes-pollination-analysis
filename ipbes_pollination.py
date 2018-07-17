@@ -675,7 +675,8 @@ def main():
             warp_task = task_graph.add_task(
                 func=warp_to_raster,
                 args=(
-                    base_path, gpw_base_tot_count_path, 'linear', warp_path),
+                    base_path, gpw_base_tot_count_path, 'bilinear',
+                    warp_path),
                 dependent_task_list=[
                     gpw_base_tot_count_task,
                     unzip_spatial_population_scenarios_task],
@@ -746,7 +747,8 @@ def warp_to_raster(
     Parameters:
         base_raster_path (str): path to base raster
         canonical_raster_path (str),
-        resample_method (str): 'near' or 'linear'.
+        resample_method (str): one of nearest, bilinear, cubic, cubic_spline,
+            lanczos, average, mode, max, min, med, q1, q3.
         target_raster_path (str): path to target warped raster.
 
     Returns:

@@ -770,7 +770,10 @@ def calculate_future_pop(
     Multiply `gpw_tot_count` by the fut_ssp/cur_ssp ratio.
     """
     target_nodata = -1
-    ssp_nodata = pygeoprocessing.get_raster_info(cur_ssp_path)['nodata'][0]
+    ssp_cur_nodata = pygeoprocessing.get_raster_info(
+        cur_ssp_path)['nodata'][0]
+    ssp_fut_nodata = pygeoprocessing.get_raster_info(
+        fut_ssp_path)['nodata'][0]
     count_nodata = pygeoprocessing.get_raster_info(
         gpw_tot_count_path)['nodata'][0]
 
@@ -780,12 +783,12 @@ def calculate_future_pop(
         result[:] = count_nodata
         zero_mask = cur_array == 0
         valid_mask = (
-            (cur_array != ssp_nodata) &
-            (fut_array != ssp_nodata) &
+            (cur_array != ssp_cur_nodata) &
+            (fut_array != ssp_fut_nodata) &
             (count_array != count_nodata) & ~zero_mask)
         result[valid_mask] = (
-            (fut_array[valid_mask] / cur_array[valid_mask]) *
-            count_array[valid_mask])
+            (fut_array[valid_mask] / cur_array[valid_mask]).astype(
+                numpy.float32) * count_array[valid_mask])
         # assume if denominator is 0 we don't want to mask anything out, just
         # get it working
         result[zero_mask] = 1.0
@@ -1200,7 +1203,7 @@ def create_prod_nutrient_raster(
     pygeoprocessing.warp_raster(
         target_10km_yield_path,
         sample_target_raster_info['pixel_size'], target_10s_yield_path,
-        'bilinear', target_bb=sample_target_raster_info['bounding_box'])
+        'cubic_spline', target_bb=sample_target_raster_info['bounding_box'])
 
     pygeoprocessing.raster_calculator(
         [(target_10s_yield_path, 1), y_ha_column, yield_nodata],

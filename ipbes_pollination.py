@@ -270,14 +270,8 @@ def main():
             task_name=f'fetch {landcover_key}',
             skip_if_target_exists=True)
 
-        _ = task_graph.add_task(
-            func=build_overviews,
-            priority=-100,
-            args=(landcover_path, 'mode'),
-            target_path_list=[f'{landcover_path}.ovr'],
-            dependent_task_list=[landcover_fetch_task],
-            task_name=f'compress {os.path.basename(landcover_path)}',
-            skip_if_target_exists=True)
+        schedule_build_overviews(
+            task_graph, landcover_path, landcover_fetch_task)
 
         for mask_prefix, globio_codes in [
                 ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
@@ -295,14 +289,7 @@ def main():
                 dependent_task_list=[landcover_fetch_task],
                 task_name=f'mask {mask_key}',)
 
-            _ = task_graph.add_task(
-                func=build_overviews,
-                priority=-100,
-                args=(mask_target_path, 'mode'),
-                target_path_list=[
-                    f'{mask_target_path}.ovr'],
-                dependent_task_list=[mask_task],
-                task_name=f'compress {os.path.basename(mask_target_path)}')
+            schedule_build_overviews(task_graph, mask_target_path, mask_task)
 
             if mask_prefix == 'hab':
                 hab_task_path_tuple = (mask_task, mask_target_path)
@@ -330,17 +317,8 @@ def main():
                 f' {os.path.basename(proportional_hab_area_2km_path)}'),
             skip_if_target_exists=True)
 
-        _ = task_graph.add_task(
-            func=build_overviews,
-            priority=-100,
-            args=(proportional_hab_area_2km_path, 'average'),
-            target_path_list=[
-                f'{proportional_hab_area_2km_path}.ovr'],
-            dependent_task_list=[prop_hab_area_2km_task],
-            task_name=(
-                'compress '
-                f'{os.path.basename(proportional_hab_area_2km_path)}'),
-            skip_if_target_exists=True)
+        schedule_build_overviews(
+            task_graph, proportional_hab_area_2km_path, prop_hab_area_2km_task)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
         #  evaluate whether there was sufficient pollinator habitat in the 2
@@ -368,15 +346,7 @@ def main():
                 prop_hab_area_2km_task, ag_task_path_tuple[0]],
             task_name=f'threshold {os.path.basename(poll_suff_path)}')
 
-        _ = task_graph.add_task(
-            func=build_overviews,
-            priority=-100,
-            args=(poll_suff_path, 'mode'),
-            target_path_list=[
-                f'{poll_suff_path}.ovr'],
-            dependent_task_list=[poll_suff_task],
-            task_name=f'compress {os.path.basename(poll_suff_path)}',
-            )
+        schedule_build_overviews(task_graph, poll_suff_path, poll_suff_task)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
@@ -400,14 +370,9 @@ def main():
                 task_name=(
                     f'tot_prod_{nutrient_id}_10s_{landcover_short_suffix}'))
 
-            _ = task_graph.add_task(
-                func=build_overviews,
-                priority=-100,
-                args=(tot_prod_nut_scenario_path, 'average'),
-                target_path_list=[f'{tot_prod_nut_scenario_path}.ovr'],
-                dependent_task_list=[tot_prod_nut_scenario_task],
-                task_name=('compress' +
-                           os.path.basename(tot_prod_nut_scenario_path)))
+            schedule_build_overviews(
+                task_graph, tot_prod_nut_scenario_path,
+                tot_prod_nut_scenario_task)
 
             poll_dep_prod_task, poll_dep_prod_path = (
                 nut_task_path_poll_dep_prod_map[nutrient_id])
@@ -429,14 +394,9 @@ def main():
                     f'poll_dep_prod_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
 
-            _ = task_graph.add_task(
-                func=build_overviews,
-                priority=-100,
-                args=(poll_dep_prod_nut_scenario_path, 'average'),
-                target_path_list=[f'{poll_dep_prod_nut_scenario_path}.ovr'],
-                dependent_task_list=[poll_dep_prod_nut_scenario_task],
-                task_name=('compress' +
-                           os.path.basename(poll_dep_prod_nut_scenario_path)))
+            schedule_build_overviews(
+                task_graph, poll_dep_prod_nut_scenario_path,
+                poll_dep_prod_nut_scenario_task)
 
             # poll_serv_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5: wild pollination-
             # derived annual production of energy (KJ/yr), vitamin A (IU/yr),
@@ -459,14 +419,9 @@ def main():
                     f'poll_serv_prod_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
 
-            _ = task_graph.add_task(
-                func=build_overviews,
-                priority=-100,
-                args=(poll_serv_prod_nut_scenario_path, 'average'),
-                target_path_list=[f'{poll_serv_prod_nut_scenario_path}.ovr'],
-                dependent_task_list=[poll_serv_prod_nut_scenario_task],
-                task_name=('compress' + os.path.basename(
-                    poll_serv_prod_nut_scenario_path)))
+            schedule_build_overviews(
+                task_graph, poll_serv_prod_nut_scenario_path,
+                poll_serv_prod_nut_scenario_task)
 
             # cont_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
             # contribution of wild pollination to total annual micronutrient
@@ -491,14 +446,8 @@ def main():
             cont_prod_nutrient_task_path_list.append(
                 (cont_prod_task, target_cont_prod_nutrient_path))
 
-            _ = task_graph.add_task(
-                func=build_overviews,
-                priority=-100,
-                args=(target_cont_prod_nutrient_path, 'average'),
-                target_path_list=[f'{target_cont_prod_nutrient_path}.ovr'],
-                dependent_task_list=[cont_prod_task],
-                task_name=('compress' + os.path.basename(
-                    target_cont_prod_nutrient_path)))
+            schedule_build_overviews(
+                task_graph, target_cont_prod_nutrient_path, cont_prod_task)
 
         # cont_poll_serv_prod_avg_10s|1d_cur|ssp1|ssp3|ssp5
         # average contribution of wild pollination to total annual
@@ -517,6 +466,11 @@ def main():
                 [task_path_tuple[0] for task_path_tuple in
                  cont_prod_nutrient_task_path_list]),
             task_name=f'cont_poll_serv_prod_avg_10s_{landcover_short_suffix}')
+
+
+        schedule_build_overviews(
+            task_graph, cont_poll_serv_prod_avg_10s_path,
+            cont_poll_serv_prod_avg_task)
 
         _ = task_graph.add_task(
             func=build_overviews,
@@ -767,6 +721,32 @@ def main():
     task_graph.close()
     task_graph.join()
     # END MAIN
+
+
+def schedule_build_overviews(task_graph, base_raster_path, base_raster_task):
+    """Build overviews of raster path using taskgraph to schedule.
+
+    Creates an external overview of `base_raster_path` raster in the same
+    directory and filename as the original with a '.ovr' extension.
+
+    Parameters:
+        task_graph (TaskGraph): TaskGraph object to schedule through.
+        base_raster_path (str): path to raster to build overviews on.
+        base_raster_task (Task): task to wait for `base_raster_path` to be
+            created on.
+
+    Returns:
+        None.
+
+    """
+    _ = task_graph.add_task(
+        func=build_overviews,
+        priority=-100,
+        args=(base_raster_path, 'mode'),
+        target_path_list=[f'{base_raster_path}.ovr'],
+        dependent_task_list=[base_raster_task],
+        task_name=f'compress {os.path.basename(base_raster_path)}',
+        skip_if_target_exists=True)
 
 
 def calculate_total_requirements(

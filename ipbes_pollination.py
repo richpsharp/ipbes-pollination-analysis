@@ -762,21 +762,6 @@ def warp_to_raster(
         target_raster_path,
         resample_method, target_bb=canonical_raster_info['bounding_box'])
 
-def _future_pop_op(
-        cur_array, fut_array, count_array, ssp_nodata, count_nodata,
-        target_nodata):
-    """Calculate future pop by dividing fut/cur*cur_count."""
-    result = numpy.empty_like(cur_array)
-    result[:] = count_nodata
-    valid_mask = (
-        (cur_array != ssp_nodata) &
-        (fut_array != ssp_nodata) &
-        (count_array != count_nodata))
-    result[valid_mask] = (
-        (fut_array[valid_mask] / cur_array[valid_mask]) *
-        count_array[valid_mask])
-    return result
-
 
 def calculate_future_pop(
         cur_ssp_path, fut_ssp_path, gpw_tot_count_path, target_ssp_pop_path):
@@ -788,10 +773,23 @@ def calculate_future_pop(
     ssp_nodata = pygeoprocessing.get_raster_info(cur_ssp_path)['nodata'][0]
     count_nodata = pygeoprocessing.get_raster_info(
         gpw_tot_count_path)['nodata'][0]
+
+    def _future_pop_op(cur_array, fut_array, count_array):
+        """Calculate future pop by dividing fut/cur*cur_count."""
+        result = numpy.empty_like(cur_array)
+        result[:] = count_nodata
+        valid_mask = (
+            (cur_array != ssp_nodata) &
+            (fut_array != ssp_nodata) &
+            (count_array != count_nodata))
+        result[valid_mask] = (
+            (fut_array[valid_mask] / cur_array[valid_mask]) *
+            count_array[valid_mask])
+        return result
+
     pygeoprocessing.raster_calculator(
-        [(cur_ssp_path, 1), (fut_ssp_path, 1), (gpw_tot_count_path, 1),
-         ssp_nodata, count_nodata, target_nodata], _future_pop_op,
-        target_ssp_pop_path)
+        [(cur_ssp_path, 1), (fut_ssp_path, 1), (gpw_tot_count_path, 1)],
+        _future_pop_op, target_ssp_pop_path, gdal.GDT_Float32, target_nodata)
 
 
 def calc_pop_count(gpw_dens_path, gpw_count_path):

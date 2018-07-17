@@ -10,6 +10,7 @@ import time
 import os
 import re
 import logging
+import itertools
 
 import google.cloud.client
 import google.cloud.storage
@@ -725,20 +726,103 @@ def main():
         'gpw_v4_e_a065plusft_2010_count': {'va': 500, 'fo': 400, 'en': 1876},
         'gpw_v4_e_a065plusmt_2010_count': {'va': 600, 'fo': 400, 'en': 2318},
     }
-    for ssp_id in (1, 3, 5):
-        ssp_task_pop_map
-        for nut_id in ('en', 'va', 'fo'):
-            task_pop_path_list = [
+    for nut_id in ('en', 'va', 'fo'):
+        # calculate 'cur' needs
+        pop_task_path_list, nut_need_list = zip(*[
+            (gpw_task_path_id_map[gpw_id],
+             nutritional_needs_map[gpw_id][nut_id])
+            for gpw_id in nutritional_needs_map])
+        pop_task_list, pop_path_list = zip(*pop_task_path_list)
+
+        target_path = os.path.join(
+            WORKING_DIR, f'tot_req_{nut_id}_10s_cur.tif')
+        task_graph.add_task(
+            func=calculate_total_requirements,
+            args=(
+                pop_path_list, nut_need_list, target_path),
+            target_path_list=[target_path],
+            dependent_task_list=pop_task_list,
+            task_name=f"""tot nut requirements {
+                os.path.basename(target_path)}""")
+
+        # calculate ssp needs
+        for ssp_id in (1, 3, 5):
+            pop_task_path_list, nut_need_list = zip(*[
                 (ssp_task_pop_map[(ssp_id, gpw_id)],
                  nutritional_needs_map[gpw_id][nut_id])
-                for gpw_id in nutritional_needs_map]
+                for gpw_id in nutritional_needs_map])
+            pop_task_list, pop_path_list = zip(*pop_task_path_list)
 
-            calculate_total_requirements(
-                nut_id, population_count_raster_scenario_list, target_path)
+            target_path = os.path.join(
+                WORKING_DIR, f'tot_req_{nut_id}_10s_ssp{ssp_id}.tif')
+            task_graph.add_task(
+                func=calculate_total_requirements,
+                args=(
+                    pop_path_list, nut_need_list, target_path),
+                target_path_list=[target_path],
+                dependent_task_list=pop_task_list,
+                task_name=f"""tot nut requirements {
+                    os.path.basename(target_path)}""")
 
     task_graph.close()
     task_graph.join()
     # END MAIN
+
+
+def calculate_total_requirements(
+        pop_path_list, nut_need_list, target_path):
+    """Calculate total nutrient requirements.
+
+    Create a new raster by summing all rasters in `pop_path_list` multiplied
+    by their corresponding scalar in `nut_need_list`.
+
+    Parameters:
+        pop_path_list (list of str): list of paths to population counts.
+        nut_need_list (list): list of scalars that correspond in order to
+            the per-count nutrient needs of `pop_path_list`.
+        target_path (str): path to target file.
+
+    Return:
+        None.
+
+    """
+
+    nodata = -1
+    pop_nodata = pygeoprocessing.get_raster_info(
+        pop_path_list[0])['nodata'][0]
+
+    def mult_and_sum(*arg_list):
+        """Arg list is an (array0, scalar0, array1, scalar1,...) list.
+
+        Returns:
+            array0*scalar0 + array1*scalar1 + .... but ignore nodata.
+
+        """
+        result = numpy.empty_like(arg_list[0])
+        result[:] = nodata
+        array_stack = numpy.array(arg_list[0::2])
+        scalar_list = numpy.array(arg_list[1::2])
+        # make a valid mask as big as a single array
+        valid_mask = numpy.logical_and.reduce(
+            array_stack == pop_nodata, axis=0)
+
+        # mask out all invalid elements but reshape so there's still the same
+        # number of arrays
+        valid_array_elements = (
+            array_stack[numpy.broadcast_to(
+                valid_mask, array_stack.shape)].reshape(
+                    -1, numpy.count_nonzero(valid_mask)))
+
+        # multiply each element of the scalar with each row of the valid
+        # array stack, then sum along the 0 axis to get the result
+        result[valid_mask] = numpy.sum(
+            (valid_array_elements.T * scalar_list).T, axis=0)
+        return result
+
+    pygeoprocessing.raster_calculator(itertools.chain(*[
+        ((path, 1), scalar) for path, scalar in zip(
+            pop_path_list, nut_need_list)]), mult_and_sum, target_path,
+        gdal.GDT_Float32, nodata)
 
 
 def subtract_rasters(

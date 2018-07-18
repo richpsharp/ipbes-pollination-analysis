@@ -48,7 +48,7 @@ WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
 N_WORKERS = 4
-DELAYED_START = False # N_WORKERS >= 0
+DELAYED_START = N_WORKERS >= 0
 
 
 def main():
@@ -745,7 +745,7 @@ def schedule_build_overviews(task_graph, base_raster_path, base_raster_task):
     _ = task_graph.add_task(
         func=build_overviews,
         priority=-100,
-        args=(base_raster_path, 'mode'),
+        args=(base_raster_path, 'nearest'),
         target_path_list=[f'{base_raster_path}.ovr'],
         dependent_task_list=[base_raster_task],
         task_name=f'compress {os.path.basename(base_raster_path)}',
@@ -1150,7 +1150,7 @@ def build_overviews(local_path, resample_method):
     raster_copy = gdal.Open(local_path)
 
     overview_levels = []
-    current_level = 8
+    current_level = 2
     while True:
         if min_dimension // current_level == 0:
             break

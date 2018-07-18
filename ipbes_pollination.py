@@ -48,7 +48,7 @@ WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
 N_WORKERS = 4
-DELAYED_START = N_WORKERS >= 0
+DELAYED_START = False # N_WORKERS >= 0
 
 
 def main():
@@ -781,7 +781,7 @@ def calculate_total_requirements(
             array0*scalar0 + array1*scalar1 + .... but ignore nodata.
 
         """
-        result = numpy.empty_like(arg_list[0])
+        result = numpy.empty(arg_list[0].shape, dtype=numpy.float32)
         result[:] = nodata
         array_stack = numpy.array(arg_list[0::2])
         scalar_list = numpy.array(arg_list[1::2])
@@ -820,7 +820,7 @@ def subtract_rasters(
 
     def sub_op(a_array, b_array, c_array):
         """Sub a-b-c as arrays."""
-        result = numpy.empty_like(a_array)
+        result = numpy.empty(a_array.shape, dtype=numpy.float32)
         result[:] = target_nodata
         valid_mask = (
             (a_array != a_nodata) &
@@ -875,7 +875,7 @@ def calculate_future_pop(
 
     def _future_pop_op(cur_array, fut_array, count_array):
         """Calculate future pop by dividing fut/cur*cur_count."""
-        result = numpy.empty_like(cur_array)
+        result = numpy.empty(cur_array.shape, dtype=numpy.float32)
         result[:] = count_nodata
         zero_mask = cur_array == 0
         valid_mask = (
@@ -1059,7 +1059,7 @@ def threshold_select_raster(
     def threshold_select_op(
             base_array, select_array, threshold_val, base_nodata,
             target_nodata):
-        result = numpy.empty_like(select_array)
+        result = numpy.empty(select_array.shape, dtype=numpy.float32)
         result[:] = target_nodata
         valid_mask = base_array != base_nodata
         result[valid_mask] = numpy.where(
@@ -1150,7 +1150,7 @@ def build_overviews(local_path, resample_method):
     raster_copy = gdal.Open(local_path)
 
     overview_levels = []
-    current_level = 2
+    current_level = 8
     while True:
         if min_dimension // current_level == 0:
             break
@@ -1196,7 +1196,7 @@ def _make_logger_callback(message):
 def total_yield_op(
         yield_nodata, pollination_yield_factor_list, *crop_yield_array_list):
     """Calculate total yield."""
-    result = numpy.empty_like(crop_yield_array_list[0])
+    result = numpy.empty(crop_yield_array_list[0].shape, dtype=numpy.float32)
     result[:] = 0.0
     all_valid = numpy.zeros(result.shape, dtype=numpy.bool)
 
@@ -1212,7 +1212,7 @@ def total_yield_op(
 
 def density_to_value_op(density_array, y_ha_array, density_nodata):
     """Calculate production."""
-    result = numpy.empty_like(density_array)
+    result = numpy.empty(density_array.shape, dtype=numpy.float32)
     result[:] = density_nodata
     valid_mask = density_array != density_nodata
     result[valid_mask] = density_array[valid_mask] * y_ha_array[valid_mask]
@@ -1335,7 +1335,7 @@ def create_cont_prod_nutrient_raster(
     target_nodata = -1.
 
     def calc_proportion(poll_serv_array, tot_prod_array):
-        result = numpy.empty_like(poll_serv_array)
+        result = numpy.empty(poll_serv_array.shape, dtype=numpy.float32)
         result[:] = target_nodata
         zero_mask = tot_prod_array == 0
         valid_mask = (
@@ -1418,7 +1418,7 @@ def area_of_pixel(pixel_size, center_lat):
 
 def _mult_raster_op(array_a, array_b, nodata_a, nodata_b, target_nodata):
     """Multiply a by b and skip nodata."""
-    result = numpy.empty_like(array_a)
+    result = numpy.empty(array_a.shape, dtype=numpy.float32)
     result[:] = target_nodata
     valid_mask = (array_a != nodata_a) & (array_b != nodata_b)
     result[valid_mask] = array_a[valid_mask] * array_b[valid_mask]

@@ -157,8 +157,7 @@ def main():
             yield_zip_url, GOOGLE_BUCKET_KEY_PATH,
             yield_zip_path),
         target_path_list=[yield_zip_path],
-        task_name=f'fetch {os.path.basename(yield_zip_path)}',
-        skip_if_target_exists=True)
+        task_name=f'fetch {os.path.basename(yield_zip_path)}')
 
     zip_touch_file_path = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield.txt')
@@ -169,8 +168,7 @@ def main():
             zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
         dependent_task_list=[yield_zip_fetch_task],
-        task_name=f'unzip monfreda_2008_observed_yield',
-        skip_if_target_exists=True)
+        task_name=f'unzip monfreda_2008_observed_yield')
 
     # fetch a landcover map to use as a base for the dimensions of the
     # production raster
@@ -181,8 +179,7 @@ def main():
         func=google_bucket_fetch_and_validate,
         args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
         target_path_list=[landcover_path],
-        task_name=f'fetch {landcover_key}',
-        skip_if_target_exists=True)
+        task_name=f'fetch {landcover_key}')
 
     yield_raster_dir = os.path.join(
         os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
@@ -267,8 +264,7 @@ def main():
             func=google_bucket_fetch_and_validate,
             args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
             target_path_list=[landcover_path],
-            task_name=f'fetch {landcover_key}',
-            skip_if_target_exists=True)
+            task_name=f'fetch {landcover_key}')
 
         schedule_build_overviews(
             task_graph, landcover_path, landcover_fetch_task)
@@ -314,8 +310,7 @@ def main():
             target_path_list=[proportional_hab_area_2km_path],
             task_name=(
                 'calculate proportional'
-                f' {os.path.basename(proportional_hab_area_2km_path)}'),
-            skip_if_target_exists=True)
+                f' {os.path.basename(proportional_hab_area_2km_path)}'))
 
         schedule_build_overviews(
             task_graph, proportional_hab_area_2km_path, prop_hab_area_2km_task)
@@ -526,7 +521,6 @@ def main():
         target_path_list=[spatial_scenarios_pop_zip_touch_file_path],
         dependent_task_list=[spatial_population_scenarios_fetch_task],
         task_name=f'unzip Spatial_population_scenarios_GeoTIFF',
-        skip_if_target_exists=True,
         priority=100)
 
     gpw_urls = {
@@ -695,7 +689,8 @@ def main():
             target_path_list=[target_path],
             dependent_task_list=pop_task_list,
             task_name=f"""tot nut requirements {
-                os.path.basename(target_path)}""")
+                os.path.basename(target_path)}""",
+            priority=100,)
         schedule_build_overviews(
                 task_graph, target_path, total_requirements_task)
 
@@ -716,7 +711,8 @@ def main():
                 target_path_list=[target_path],
                 dependent_task_list=pop_task_list,
                 task_name=f"""tot nut requirements {
-                    os.path.basename(target_path)}""")
+                    os.path.basename(target_path)}""",
+                priority=100,)
 
             schedule_build_overviews(
                 task_graph, target_path, total_requirements_task)
@@ -748,8 +744,7 @@ def schedule_build_overviews(task_graph, base_raster_path, base_raster_task):
         args=(base_raster_path, 'nearest'),
         target_path_list=[f'{base_raster_path}.ovr'],
         dependent_task_list=[base_raster_task],
-        task_name=f'compress {os.path.basename(base_raster_path)}',
-        skip_if_target_exists=True)
+        task_name=f'compress {os.path.basename(base_raster_path)}')
 
 
 def calculate_total_requirements(
@@ -1069,7 +1064,8 @@ def threshold_select_raster(
 
     pygeoprocessing.raster_calculator(
         [(base_raster_path, 1), (select_raster_path, 1),
-         threshold_val, base_nodata, target_nodata], threshold_select_op,
+         (threshold_val, 'raw'), (base_nodata, 'raw'),
+         (target_nodata, 'raw')], threshold_select_op,
         target_path, gdal.GDT_Byte, target_nodata, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
@@ -1280,7 +1276,7 @@ def create_prod_nutrient_raster(
     yield_nodata = yield_raster_info['nodata'][0]
 
     pygeoprocessing.raster_calculator(
-        [yield_nodata, (pollination_yield_factor_list, 'raw')] +
+        [(yield_nodata, 'raw'), (pollination_yield_factor_list, 'raw')] +
         [(x, 1) for x in yield_raster_path_list], total_yield_op,
         target_10km_yield_path, gdal.GDT_Float32, yield_nodata),
 
@@ -1302,9 +1298,9 @@ def create_prod_nutrient_raster(
         'cubicspline', target_bb=sample_target_raster_info['bounding_box'])
 
     pygeoprocessing.raster_calculator(
-        [(target_10s_yield_path, 1), y_ha_column, yield_nodata],
-        density_to_value_op, target_10s_production_path, gdal.GDT_Float32,
-        yield_nodata)
+        [(target_10s_yield_path, 1), (y_ha_column, 'raw'),
+         (yield_nodata, 'raw')], density_to_value_op,
+        target_10s_production_path, gdal.GDT_Float32, yield_nodata)
 
 
 def create_cont_prod_nutrient_raster(
@@ -1432,9 +1428,9 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
 
     target_nodata = -1.0
     pygeoprocessing.raster_calculator(
-        [(raster_a_path, 1), (raster_b_path, 1), nodata_a, nodata_b,
-         target_nodata], _mult_raster_op, target_path, gdal.GDT_Float32,
-        target_nodata)
+        [(raster_a_path, 1), (raster_b_path, 1), (nodata_a, 'raw'),
+         (nodata_b, 'raw'), (target_nodata, 'raw')], _mult_raster_op,
+        target_path, gdal.GDT_Float32, target_nodata)
 
 
 if __name__ == '__main__':

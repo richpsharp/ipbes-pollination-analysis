@@ -907,7 +907,7 @@ def calc_pop_count(gpw_dens_path, gpw_count_path):
 
     nodata = gpw_dens_info['nodata'][0]
     pygeoprocessing.raster_calculator(
-        [(gpw_dens_path, 1), y_ha_column, nodata],
+        [(gpw_dens_path, 1), (y_ha_column, 'raw'), (nodata, 'raw')],
         density_to_value_op, gpw_count_path, gdal.GDT_Float32,
         nodata)
 

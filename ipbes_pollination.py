@@ -800,7 +800,7 @@ def calculate_total_requirements(
         return result
 
     pygeoprocessing.raster_calculator(list(itertools.chain(*[
-        ((path, 1), scalar) for path, scalar in zip(
+        ((path, 1), (scalar, 'raw')) for path, scalar in zip(
             pop_path_list, nut_need_list)])), mult_and_sum, target_path,
         gdal.GDT_Float32, nodata)
 

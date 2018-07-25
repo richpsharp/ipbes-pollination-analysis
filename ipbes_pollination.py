@@ -11,6 +11,7 @@ import os
 import re
 import logging
 import itertools
+import multiprocessing
 
 import google.cloud.client
 import google.cloud.storage
@@ -47,7 +48,7 @@ GLOBIO_NATURAL_CODES = [6, (50, 180)]
 WORKING_DIR = 'workspace'
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = 4
+N_WORKERS = multiprocessing.cpu_count()
 DELAYED_START = N_WORKERS >= 0
 
 

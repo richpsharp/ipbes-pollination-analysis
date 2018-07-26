@@ -701,7 +701,7 @@ def schedule_build_overviews(task_graph, base_raster_path, base_raster_task):
         args=(base_raster_path, 'nearest'),
         target_path_list=[f'{base_raster_path}.ovr'],
         dependent_task_list=[base_raster_task],
-        task_name=f'compress {os.path.basename(base_raster_path)}')
+        task_name=f'overviews {os.path.basename(base_raster_path)}')
 
 
 def calculate_total_requirements(
@@ -811,8 +811,7 @@ def warp_to_raster(
     pygeoprocessing.warp_raster(
         base_raster_path, canonical_raster_info['pixel_size'],
         target_raster_path,
-        resample_method, target_bb=canonical_raster_info['bounding_box'],
-        n_threads=2)
+        resample_method, target_bb=canonical_raster_info['bounding_box'])
 
 
 def calculate_future_pop(
@@ -1237,8 +1236,7 @@ def create_prod_nutrient_raster(
     pygeoprocessing.warp_raster(
         target_10km_yield_path,
         sample_target_raster_info['pixel_size'], target_10s_yield_path,
-        'cubicspline', target_bb=sample_target_raster_info['bounding_box'],
-        n_threads=2)
+        'cubicspline', target_bb=sample_target_raster_info['bounding_box'])
 
     pygeoprocessing.raster_calculator(
         [(target_10s_yield_path, 1), y_ha_column,

@@ -744,6 +744,7 @@ def calculate_total_requirements(
         # number of arrays
         valid_array_elements = (
             array_stack[numpy.broadcast_to(valid_mask, array_stack.shape)])
+        array_stack = None
 
         # sometimes this array is empty, check first before reshaping
         if valid_array_elements:
@@ -753,6 +754,9 @@ def calculate_total_requirements(
             # array stack, then sum along the 0 axis to get the result
             result[valid_mask] = numpy.sum(
                 (valid_array_elements.T * scalar_list).T, axis=0)
+        scalar_list = None
+        valid_mask = None
+        valid_array_elements = None
         return result
 
     pygeoprocessing.raster_calculator(list(itertools.chain(*[

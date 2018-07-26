@@ -645,7 +645,7 @@ def main():
             func=calculate_total_requirements,
             args=(
                 pop_path_list, nut_need_list, tot_nut_requirements_path),
-            tot_nut_requirements_path_list=[tot_nut_requirements_path],
+            target_path_list=[tot_nut_requirements_path],
             dependent_task_list=pop_task_list,
             task_name=f"""tot nut requirements {
                 os.path.basename(tot_nut_requirements_path)}""",
@@ -1030,15 +1030,14 @@ def mask_raster(base_path, codes, target_path):
         None.
 
     """
-    code_list = [
+    code_list = numpy.array([
         item for sublist in [
             range(x[0], x[1]+1) if isinstance(x, tuple) else [x]
-            for x in codes] for item in sublist]
-    code_array = numpy.array(code_list)
-    LOGGER.debug(f'expanded code array {code_array}')
+            for x in codes] for item in sublist])
+    LOGGER.debug(f'expanded code array {code_list}')
 
     pygeoprocessing.raster_calculator(
-        [(base_path, 1), (code_array, 'raw')], mask_codes_op, target_path,
+        [(base_path, 1), (code_list, 'raw')], mask_codes_op, target_path,
         gdal.GDT_Byte, 2, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',

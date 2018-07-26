@@ -303,7 +303,7 @@ def main():
                 'gtiff_creation_options': (
                     'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                     'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
-                    'NUM_THREADS=ALL_CPUS')},
+                    'NUM_THREADS=2')},
             dependent_task_list=[hab_task_path_tuple[0], kernel_task],
             target_path_list=[proportional_hab_area_2km_path],
             task_name=(
@@ -811,7 +811,8 @@ def warp_to_raster(
     pygeoprocessing.warp_raster(
         base_raster_path, canonical_raster_info['pixel_size'],
         target_raster_path,
-        resample_method, target_bb=canonical_raster_info['bounding_box'])
+        resample_method, target_bb=canonical_raster_info['bounding_box'],
+        n_threads=2)
 
 
 def calculate_future_pop(
@@ -1011,7 +1012,7 @@ def threshold_select_raster(
         target_path, gdal.GDT_Byte, target_nodata, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
-            'NUM_THREADS=ALL_CPUS'))
+            'NUM_THREADS=2'))
 
 
 def mask_raster(base_path, codes, target_path):
@@ -1043,7 +1044,7 @@ def mask_raster(base_path, codes, target_path):
         gdal.GDT_Byte, 2, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
-            'NUM_THREADS=ALL_CPUS'))
+            'NUM_THREADS=2'))
 
 
 def unzip_file(zipfile_path, target_dir, touchfile_path):
@@ -1236,7 +1237,8 @@ def create_prod_nutrient_raster(
     pygeoprocessing.warp_raster(
         target_10km_yield_path,
         sample_target_raster_info['pixel_size'], target_10s_yield_path,
-        'cubicspline', target_bb=sample_target_raster_info['bounding_box'])
+        'cubicspline', target_bb=sample_target_raster_info['bounding_box'],
+        n_threads=2)
 
     pygeoprocessing.raster_calculator(
         [(target_10s_yield_path, 1), y_ha_column,

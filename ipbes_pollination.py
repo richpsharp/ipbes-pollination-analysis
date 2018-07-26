@@ -865,7 +865,7 @@ def calc_pop_count(gpw_dens_path, gpw_count_path):
 
     nodata = gpw_dens_info['nodata'][0]
     pygeoprocessing.raster_calculator(
-        [(gpw_dens_path, 1), (y_ha_column, 'raw'), (nodata, 'raw')],
+        [(gpw_dens_path, 1), y_ha_column, (nodata, 'raw')],
         density_to_value_op, gpw_count_path, gdal.GDT_Float32,
         nodata)
 
@@ -1237,7 +1237,7 @@ def create_prod_nutrient_raster(
         'cubicspline', target_bb=sample_target_raster_info['bounding_box'])
 
     pygeoprocessing.raster_calculator(
-        [(target_10s_yield_path, 1), (y_ha_column, 'raw'),
+        [(target_10s_yield_path, 1), y_ha_column,
          (yield_nodata, 'raw')], density_to_value_op,
         target_10s_production_path, gdal.GDT_Float32, yield_nodata)
 

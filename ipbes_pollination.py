@@ -57,8 +57,6 @@ DELAYED_START = N_WORKERS >= 0
 
 def main():
     """Entry point."""
-    reproduce_env = reproduce.Reproduce(WORKING_DIR)
-    LOGGER.debug(reproduce_env['CACHE_DIR'])
     task_graph = taskgraph.TaskGraph(
         CHURN_DIR, N_WORKERS, delayed_start=DELAYED_START,
         reporting_interval=5.0)
@@ -301,7 +299,7 @@ def main():
                 (hab_task_path_tuple[1], 1), (kernel_raster_path, 1),
                 proportional_hab_area_2km_path],
             kwargs={
-                'working_dir': reproduce_env['CACHE_DIR'],
+                'working_dir': CHURN_DIR,
                 'gtiff_creation_options': (
                     'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                     'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
@@ -511,7 +509,7 @@ def main():
         schedule_build_overviews(task_graph, gpw_dens_path, gpw_fetch_task)
 
         gpw_count_path = os.path.join(
-            WORKING_DIR, 'gpw_count', f"""{gpw_id[:-4]}count.tif""")
+            CHURN_DIR, 'gpw_count', f"""{gpw_id[:-4]}count.tif""")
         gpw_count_task = task_graph.add_task(
             func=calc_pop_count,
             args=(gpw_dens_path, gpw_count_path),

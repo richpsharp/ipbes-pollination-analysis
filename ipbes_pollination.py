@@ -51,7 +51,8 @@ ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
 NODATA = -9999
-N_WORKERS = multiprocessing.cpu_count()
+# I've found the taskgraph at most gets about 16 tasks wide
+N_WORKERS = min(16, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
 

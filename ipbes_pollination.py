@@ -24,6 +24,13 @@ import reproduce
 import taskgraph
 import pygeoprocessing
 
+try:
+    # try to set a 2GB ram limit if possible
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, 2**31)
+except ImportError:
+    pass
+
 logging.basicConfig(
     level=logging.DEBUG,
     format=(

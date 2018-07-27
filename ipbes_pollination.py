@@ -27,7 +27,7 @@ import pygeoprocessing
 try:
     # try to set a 2GB ram limit if possible
     import resource
-    resource.setrlimit(resource.RLIMIT_AS, 2**31)
+    resource.setrlimit(resource.RLIMIT_AS, (2**31, -1))
 except ImportError:
     pass
 

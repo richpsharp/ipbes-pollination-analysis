@@ -812,7 +812,8 @@ def warp_to_raster(
     pygeoprocessing.warp_raster(
         base_raster_path, canonical_raster_info['pixel_size'],
         target_raster_path,
-        resample_method, target_bb=canonical_raster_info['bounding_box'])
+        resample_method, target_bb=canonical_raster_info['bounding_box'],
+        n_threads=2)
 
 
 def calculate_future_pop(
@@ -1237,7 +1238,8 @@ def create_prod_nutrient_raster(
     pygeoprocessing.warp_raster(
         target_10km_yield_path,
         sample_target_raster_info['pixel_size'], target_10s_yield_path,
-        'cubicspline', target_bb=sample_target_raster_info['bounding_box'])
+        'cubicspline', target_bb=sample_target_raster_info['bounding_box'],
+        n_threads=2)
 
     pygeoprocessing.raster_calculator(
         [(target_10s_yield_path, 1), y_ha_column,

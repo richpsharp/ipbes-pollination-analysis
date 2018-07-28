@@ -2,7 +2,7 @@
 # --------------------
 
 GDAL>=2.0,<3.0
-pygeoprocessing>=1.2.2
+pygeoprocessing>=1.2.3
 google.cloud
 pandas>=0.22.0
 numpy>=1.11.0

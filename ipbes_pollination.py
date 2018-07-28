@@ -304,7 +304,8 @@ def main():
                 'gtiff_creation_options': (
                     'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                     'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
-                    'NUM_THREADS=2')},
+                    'NUM_THREADS=2'),
+                'n_threads': 2},
             dependent_task_list=[hab_task_path_tuple[0], kernel_task],
             target_path_list=[proportional_hab_area_2km_path],
             task_name=(

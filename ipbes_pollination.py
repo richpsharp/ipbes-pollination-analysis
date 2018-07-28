@@ -584,7 +584,8 @@ def main():
                 dependent_task_list=[
                     gpw_base_tot_count_task,
                     unzip_spatial_population_scenarios_task],
-                target_path_list=[warp_path])
+                target_path_list=[warp_path],
+                task_name=f'warp to raster {os.path.basename(warp_path)}')
             warp_task_list.append(warp_task)
             schedule_build_overviews(task_graph, warp_path, warp_task)
 

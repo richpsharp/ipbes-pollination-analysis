@@ -51,18 +51,18 @@ OUTPUT_DIR = os.path.join(WORKING_DIR, 'outputs')
 ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
-GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 NODATA = -9999
 # I've found the taskgraph at most gets about 32 tasks wide
 N_WORKERS = min(32, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
+GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 MERCURIAL_HASH_ID = subprocess.check_output(
     ['hg', 'id', '--id']).strip().decode('utf-8')
 if MERCURIAL_HASH_ID.endswith('+'):
     raise RuntimeError(
         f'Repository must be clean before running: {MERCURIAL_HASH_ID}')
-BLOB_ROOT = f'''ipbes_pollination_result_{MERCURIAL_HASH_ID}/'''
+BLOB_ROOT = f'''ipbes_pollination_result_{MERCURIAL_HASH_ID}'''
 
 
 def main():
@@ -738,7 +738,7 @@ def upload_blob(task_graph, base_path, dependent_task):
 
     """
     blob_path = (
-        os.path.join(os.path.basename(base_path)))
+        os.path.join(BLOB_ROOT, os.path.basename(base_path)))
     _ = task_graph.add_task(
         func=google_bucket_upload,
         args=(

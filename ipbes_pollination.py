@@ -57,15 +57,11 @@ NODATA = -9999
 N_WORKERS = min(32, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
-try:
-    CLEAN_STRING = subprocess.check_output(
-        "hg summary | grep 'commit: .*(clean)'").strip().decode('utf-8')
-except subprocess.CalledProcessError as e:
-    raise RuntimeError(
-        f"Cannot run script unless changes committed: {e}")
-
 MERCURIAL_HASH_ID = subprocess.check_output(
     ['hg', 'id', '--id']).strip().decode('utf-8')
+if MERCURIAL_HASH_ID.endswith('+'):
+    raise RuntimeError(
+        f'Repository must be clean before running: {MERCURIAL_HASH_ID}')
 BLOB_ROOT = f'''ipbes_pollination_result_{MERCURIAL_HASH_ID}/'''
 
 

@@ -46,7 +46,7 @@ GLOBIO_AG_CODES = [2, (230, 232)]
 GLOBIO_NATURAL_CODES = [6, (50, 180)]
 
 WORKING_DIR = 'workspace'
-OUPUT_DIR = os.path.join(WORKING_DIR, 'outputs')
+OUTPUT_DIR = os.path.join(WORKING_DIR, 'outputs')
 ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
@@ -351,7 +351,7 @@ def main():
                 prod_total_nut_10s_task_path_map[nutrient_id])
 
             prod_total_path = os.path.join(
-                OUPUT_DIR, f'''prod_total_{
+                OUTPUT_DIR, f'''prod_total_{
                     nutrient_id}_10s_{landcover_short_suffix}.tif''')
 
             tot_prod_nut_scenario_task = task_graph.add_task(
@@ -372,7 +372,7 @@ def main():
                 poll_dep_prod_nut_10s_task_path_map[nutrient_id])
 
             prod_poll_dep_total_nut_scenario_path = os.path.join(
-                WORKING_DIR, 'main_outputs',
+                WORKING_DIR, OUTPUT_DIR,
                 f'prod_poll_dep_total_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
 
@@ -396,7 +396,7 @@ def main():
             # vitamin A (IU/yr), and folate (mg/yr) that can be met by wild
             # pollinators due to the proximity of sufficient habitat.
             prod_poll_dep_realized_nut_scenario_path = os.path.join(
-                WORKING_DIR, 'main_outputs',
+                WORKING_DIR, OUTPUT_DIR,
                 f'prod_poll_dep_realized_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
 
@@ -640,7 +640,7 @@ def main():
         pop_task_list, pop_path_list = zip(*pop_task_path_list)
 
         tot_nut_requirements_path = os.path.join(
-            OUPUT_DIR,
+            OUTPUT_DIR,
             f'nut_req_local_{nut_id}_10s_cur.tif')
         total_requirements_task = task_graph.add_task(
             func=calculate_total_requirements,
@@ -663,7 +663,8 @@ def main():
             pop_task_list, pop_path_list = zip(*pop_task_path_list)
 
             target_path = os.path.join(
-                WORKING_DIR, f'tot_req_{nut_id}_10s_ssp{ssp_id}.tif')
+                WORKING_DIR, OUTPUT_DIR,
+                f'nut_req_{nut_id}_10s_ssp{ssp_id}.tif')
             total_requirements_task = task_graph.add_task(
                 func=calculate_total_requirements,
                 args=(

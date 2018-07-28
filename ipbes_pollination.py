@@ -14,9 +14,9 @@ import logging
 import itertools
 import multiprocessing
 
+from osgeo import gdal
 import google.cloud.client
 import google.cloud.storage
-from osgeo import gdal
 from osgeo import osr
 import pandas
 import numpy
@@ -24,6 +24,9 @@ import scipy.ndimage.morphology
 import reproduce
 import taskgraph
 import pygeoprocessing
+
+# set a 1GB limit for the cache
+gdal.SetCacheMax(2**30)
 
 logging.basicConfig(
     level=logging.DEBUG,

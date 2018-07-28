@@ -516,7 +516,7 @@ def main():
     gpw_task_path_id_map = {}
     for gpw_id, gpw_url in gpw_urls.items():
         gpw_dens_path = os.path.join(
-            CHURN_DIR, 'gpw_pop_densities', os.path.basename(gpw_url))
+            ECOSHARD_DIR, 'gpw_pop_densities', os.path.basename(gpw_url))
         gpw_fetch_task = task_graph.add_task(
             func=google_bucket_fetch_and_validate,
             args=(gpw_url, GOOGLE_BUCKET_KEY_PATH, gpw_dens_path),

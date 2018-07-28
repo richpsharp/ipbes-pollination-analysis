@@ -4,6 +4,7 @@ Pollination analysis for IPBES.
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
     https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
+import subprocess
 import sys
 import zipfile
 import time
@@ -50,10 +51,21 @@ OUTPUT_DIR = os.path.join(WORKING_DIR, 'outputs')
 ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')
 GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
+GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 NODATA = -9999
 # I've found the taskgraph at most gets about 32 tasks wide
 N_WORKERS = min(32, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
+
+try:
+    CLEAN_STRING = subprocess.check_output(
+        "hg summary | grep 'commit: (clean)'").strip().decode('utf-8')
+except subprocess.CalledProcessError as e:
+    raise RuntimeError(
+        f"Cannot run script unless changes committed: {e}")
+MERCURIAL_HASH_ID = subprocess.check_output(
+    ['hg', 'id', '--id']).strip().decode('utf-8')
+BLOB_ROOT = f'''ipbes_pollination_result_{MERCURIAL_HASH_ID}/'''
 
 
 def main():
@@ -353,7 +365,6 @@ def main():
             prod_total_path = os.path.join(
                 OUTPUT_DIR, f'''prod_total_{
                     nutrient_id}_10s_{landcover_short_suffix}.tif''')
-
             tot_prod_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
@@ -363,10 +374,10 @@ def main():
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
                 task_name=(
                     f'tot_prod_{nutrient_id}_10s_{landcover_short_suffix}'))
-
+            upload_blob(
+                task_graph, prod_total_path, tot_prod_nut_scenario_task)
             schedule_build_overviews(
-                task_graph, prod_total_path,
-                tot_prod_nut_scenario_task)
+                task_graph, prod_total_path, tot_prod_nut_scenario_task)
 
             poll_dep_prod_task, poll_dep_prod_path = (
                 poll_dep_prod_nut_10s_task_path_map[nutrient_id])
@@ -375,7 +386,6 @@ def main():
                 WORKING_DIR, OUTPUT_DIR,
                 f'prod_poll_dep_total_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
-
             poll_dep_prod_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
@@ -387,6 +397,9 @@ def main():
                 task_name=(
                     f'poll_dep_prod_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
+            upload_blob(
+                task_graph, prod_poll_dep_total_nut_scenario_path,
+                poll_dep_prod_nut_scenario_task)
             schedule_build_overviews(
                 task_graph, prod_poll_dep_total_nut_scenario_path,
                 poll_dep_prod_nut_scenario_task)
@@ -399,7 +412,6 @@ def main():
                 WORKING_DIR, OUTPUT_DIR,
                 f'prod_poll_dep_realized_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
-
             prod_poll_dep_realized_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
@@ -412,6 +424,9 @@ def main():
                 task_name=(
                     f'prod_poll_dep_realized_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
+            upload_blob(
+                task_graph, prod_poll_dep_realized_nut_scenario_path,
+                prod_poll_dep_realized_nut_scenario_task)
             schedule_build_overviews(
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
@@ -651,6 +666,8 @@ def main():
             task_name=f"""tot nut requirements {
                 os.path.basename(tot_nut_requirements_path)}""",
             priority=100,)
+        upload_blob(
+            task_graph, tot_nut_requirements_path, total_requirements_task)
         schedule_build_overviews(
                 task_graph, tot_nut_requirements_path, total_requirements_task)
 
@@ -662,21 +679,21 @@ def main():
                 for gpw_id in nutritional_needs_map])
             pop_task_list, pop_path_list = zip(*pop_task_path_list)
 
-            target_path = os.path.join(
+            nut_req_path = os.path.join(
                 WORKING_DIR, OUTPUT_DIR,
                 f'nut_req_{nut_id}_10s_ssp{ssp_id}.tif')
-            total_requirements_task = task_graph.add_task(
+            nut_req_task = task_graph.add_task(
                 func=calculate_total_requirements,
                 args=(
-                    pop_path_list, nut_need_list, target_path),
-                target_path_list=[target_path],
+                    pop_path_list, nut_need_list, nut_req_path),
+                target_path_list=[nut_req_path],
                 dependent_task_list=pop_task_list,
                 task_name=f"""tot nut requirements {
-                    os.path.basename(target_path)}""",
+                    os.path.basename(nut_req_path)}""",
                 priority=100,)
-
+            upload_blob(task_graph, nut_req_path, nut_req_task)
             schedule_build_overviews(
-                task_graph, target_path, total_requirements_task)
+                task_graph, nut_req_path, nut_req_task)
 
     task_graph.close()
     task_graph.join()
@@ -699,13 +716,39 @@ def schedule_build_overviews(task_graph, base_raster_path, base_raster_task):
         None.
 
     """
-    _ = task_graph.add_task(
+    target_overview_path = f'{base_raster_path}.ovr'
+    overview_task = task_graph.add_task(
         func=build_overviews,
         priority=-100,
         args=(base_raster_path, 'nearest'),
-        target_path_list=[f'{base_raster_path}.ovr'],
+        target_path_list=[target_overview_path],
         dependent_task_list=[base_raster_task],
         task_name=f'overviews {os.path.basename(base_raster_path)}')
+    upload_blob(task_graph, target_overview_path, overview_task)
+
+
+def upload_blob(task_graph, base_path, dependent_task):
+    """Upload file to blob root.
+
+    Parameters:
+        task_graph (taskgraph.TaskGraph): TaskGraph object to schedule.
+        base_path (str): path to local file to upload. Blob id will end with
+            the base filename of this path.
+        dependent_task (taskgraph.Task): task that creates ``base_path``.
+
+    Returns:
+        None.
+
+    """
+    blob_path = (
+        os.path.join(os.path.basename(base_path)))
+    _ = task_graph.add_task(
+        func=google_bucket_upload,
+        args=(
+            base_path, GOOGLE_BUCKET_ID, blob_path,
+            GOOGLE_BUCKET_KEY_PATH),
+        dependent_task_list=[dependent_task],
+        task_name=f'google bucket upload {blob_path}')
 
 
 def calculate_total_requirements(
@@ -964,6 +1007,36 @@ def google_bucket_fetch_and_validate(url, json_key_path, target_path):
     blob.download_to_filename(target_path)
     if not reproduce.valid_hash(target_path, 'embedded'):
         raise ValueError(f"{target_path}' does not match its expected hash")
+
+
+def google_bucket_upload(
+        local_file_path, bucket_id, blob_path, json_key_path):
+    """Upload a local file to a given bucket.
+
+    Uploads ``local_file_path`` to a blob registered on the ``json_key_path``
+    account. The blob will be named as the filename of ``local_file_path``
+    prefixed with the directory of ``__file__[mercurial_hash]/``
+
+    Parameters:
+        local_file_path (string): path to file to upload.
+        bucket_id (string): name of Google Bucket.
+        blob_id (string): name of the blob to upload to the bucket.
+        json_key_path (string): path to Google Cloud private key generated by
+            https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+
+    Returns:
+        None.
+
+    """
+    client = google.cloud.storage.client.Client.from_service_account_json(
+        json_key_path)
+    bucket = client.get_bucket(bucket_id)
+    blob = bucket.blob(blob_path)
+    if not blob.exists():
+        LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
+        blob.upload_from_filename(local_file_path)
+    else:
+        LOGGER.info(f'not uploading {blob_path} exists')
 
 
 def mask_codes_op(base_array, codes_array):

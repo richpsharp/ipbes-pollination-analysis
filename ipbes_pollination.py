@@ -396,7 +396,7 @@ def main():
                 poll_dep_prod_nut_10s_task_path_map[nutrient_id])
 
             prod_poll_dep_total_nut_scenario_path = os.path.join(
-                WORKING_DIR, OUTPUT_DIR,
+                OUTPUT_DIR,
                 f'prod_poll_dep_total_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             poll_dep_prod_nut_scenario_task = task_graph.add_task(
@@ -422,7 +422,7 @@ def main():
             # vitamin A (IU/yr), and folate (mg/yr) that can be met by wild
             # pollinators due to the proximity of sufficient habitat.
             prod_poll_dep_realized_nut_scenario_path = os.path.join(
-                WORKING_DIR, OUTPUT_DIR,
+                OUTPUT_DIR,
                 f'prod_poll_dep_realized_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             prod_poll_dep_realized_nut_scenario_task = task_graph.add_task(
@@ -694,7 +694,7 @@ def main():
             pop_task_list, pop_path_list = zip(*pop_task_path_list)
 
             nut_req_path = os.path.join(
-                WORKING_DIR, OUTPUT_DIR,
+                OUTPUT_DIR,
                 f'nut_req_{nut_id}_10s_ssp{ssp_id}.tif')
             nut_req_task = task_graph.add_task(
                 func=calculate_total_requirements,

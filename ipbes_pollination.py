@@ -227,6 +227,10 @@ def main():
                 crop_nutrient_table_fetch_task],
             task_name=f"""create prod raster {
                 os.path.basename(prod_total_nut_10s_path)}""")
+        for upload_path in [
+                yield_total_nut_10km_path, yield_total_nut_10s_path,
+                prod_total_nut_10s_path]:
+            upload_blob(task_graph, upload_path, prod_total_task)
         prod_total_nut_10s_task_path_map[nutrient_id] = (
             prod_total_task, prod_total_nut_10s_path)
 
@@ -253,6 +257,10 @@ def main():
             dependent_task_list=[landcover_fetch_task, unzip_yield_task],
             task_name=f"""create poll dep production raster {
                 os.path.basename(poll_dep_prod_nut_10s_path)}""")
+        for upload_path in [
+                poll_dep_yield_nut_10km_path, poll_dep_yield_nut_10s_path,
+                poll_dep_prod_nut_10s_path]:
+            upload_blob(task_graph, upload_path, pol_dep_prod_task)
         poll_dep_prod_nut_10s_task_path_map[nutrient_id] = (
             pol_dep_prod_task, poll_dep_prod_nut_10s_path)
 
@@ -295,6 +303,7 @@ def main():
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
                 task_name=f'mask {mask_key}',)
+            upload_blob(task_graph, mask_target_path, mask_task)
             schedule_build_overviews(task_graph, mask_target_path, mask_task)
 
             if mask_prefix == 'hab':
@@ -322,8 +331,12 @@ def main():
             task_name=(
                 'calculate proportional'
                 f' {os.path.basename(proportional_hab_area_2km_path)}'))
+        upload_blob(
+            task_graph, proportional_hab_area_2km_path,
+            prop_hab_area_2km_task)
         schedule_build_overviews(
-            task_graph, proportional_hab_area_2km_path, prop_hab_area_2km_task)
+            task_graph, proportional_hab_area_2km_path,
+            prop_hab_area_2km_task)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
         #  evaluate whether there was sufficient pollinator habitat in the 2
@@ -351,6 +364,7 @@ def main():
                 prop_hab_area_2km_task, ag_task_path_tuple[0]],
             task_name=f"""poll_suff_ag_coverage_mask {
                 os.path.basename(pollinator_suff_hab_path)}""")
+        upload_blob(task_graph, pollinator_suff_hab_path, poll_suff_task)
         schedule_build_overviews(
             task_graph, pollinator_suff_hab_path, poll_suff_task)
 
@@ -534,6 +548,7 @@ def main():
             task_name=f"""pop count {os.path.basename(gpw_count_path)}""")
         gpw_task_path_id_map[f'{gpw_id[:-4]}count'] = (
             gpw_count_task, gpw_count_path)
+        upload_blob(task_graph, gpw_count_path, gpw_count_task)
         schedule_build_overviews(task_graph, gpw_count_path, gpw_count_task)
 
     # calculate 15-65 population gpw count by subtracting total from
@@ -740,7 +755,7 @@ def upload_blob(task_graph, base_path, dependent_task):
 
     """
     blob_path = (
-        os.path.join(BLOB_ROOT, os.path.basename(base_path)))
+        os.path.join(BLOB_ROOT, os.path.relpath(base_path, WORKING_DIR)))
     _ = task_graph.add_task(
         func=google_bucket_upload,
         args=(

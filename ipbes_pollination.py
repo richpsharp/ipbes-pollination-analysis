@@ -754,8 +754,11 @@ def upload_blob(task_graph, base_path, dependent_task):
         None.
 
     """
+    # get the relative blob path from the workspace and use Google blob
+    # notation for directories
     blob_path = (
-        os.path.join(BLOB_ROOT, os.path.relpath(base_path, WORKING_DIR)))
+        os.path.join(BLOB_ROOT, os.path.relpath(
+            base_path, WORKING_DIR)).replace(os.sep, '/'))
     _ = task_graph.add_task(
         func=google_bucket_upload,
         args=(

@@ -37,7 +37,7 @@ logging.basicConfig(
         ' [%(pathname)s.%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger('ipbes_pollination')
-
+_MULT_NODATA = -1
 # the following are the globio landcover codes. A tuple (x, y) indicates the
 # inclusive range from x to y. Pollinator habitat was defined as any natural
 # land covers, as defined (GLOBIO land-cover classes 6, secondary vegetation,
@@ -381,7 +381,7 @@ def main():
                 pollinator_suff_hab_path),
             target_path_list=[pollinator_suff_hab_path],
             dependent_task_list=[
-                prop_hab_area_2km_task, ag_task_path_tuple[0]],
+                pollhab_2km_prop_task, ag_task_path_tuple[0]],
             task_name=f"""poll_suff_ag_coverage_mask {
                 os.path.basename(pollinator_suff_hab_path)}""")
         upload_blob(task_graph, pollinator_suff_hab_path, poll_suff_task)
@@ -477,12 +477,9 @@ def main():
                 args=([
                     (prod_total_potential_path, 1),
                     (prod_poll_dep_realized_nut_scenario_path, 1),
-                    (pygeoprocessing.get_raster_info(
-                        prod_total_potential_path)['nodata'][0], 'raw'),
-                    (pygeoprocessing.get_raster_info(
-                        prod_poll_dep_realized_nut_scenario_path)[
-                            'nodata'][0], 'raw'),
-                    (-1, 'raw')], sub_two_op,
+                    (_MULT_NODATA, 'raw'),
+                    (_MULT_NODATA, 'raw'),
+                    (_MULT_NODATA, 'raw')], sub_two_op,
                     prod_poll_dep_unrealized_nut_scenario_path,
                     gdal.GDT_Float32, -1),
                 target_path_list=[prod_poll_dep_unrealized_nut_scenario_path],
@@ -510,12 +507,9 @@ def main():
                 args=([
                     (prod_total_potential_path, 1),
                     (prod_poll_dep_unrealized_nut_scenario_path, 1),
-                    (pygeoprocessing.get_raster_info(
-                        prod_total_potential_path)['nodata'][0], 'raw'),
-                    (pygeoprocessing.get_raster_info(
-                        prod_poll_dep_unrealized_nut_scenario_path)[
-                            'nodata'][0], 'raw'),
-                    (-1, 'raw')], sub_two_op,
+                    (_MULT_NODATA, 'raw'),
+                    (_MULT_NODATA, 'raw'),
+                    (_MULT_NODATA, 'raw')], sub_two_op,
                     prod_total_realized_nut_scenario_path,
                     gdal.GDT_Float32, -1),
                 target_path_list=[prod_total_realized_nut_scenario_path],
@@ -1489,11 +1483,10 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
     nodata_a = pygeoprocessing.get_raster_info(raster_a_path)['nodata'][0]
     nodata_b = pygeoprocessing.get_raster_info(raster_b_path)['nodata'][0]
 
-    target_nodata = -1.0
     pygeoprocessing.raster_calculator(
         [(raster_a_path, 1), (raster_b_path, 1), (nodata_a, 'raw'),
-         (nodata_b, 'raw'), (target_nodata, 'raw')], _mult_raster_op,
-        target_path, gdal.GDT_Float32, target_nodata)
+         (nodata_b, 'raw'), (_MULT_NODATA, 'raw')], _mult_raster_op,
+        target_path, gdal.GDT_Float32, _MULT_NODATA)
 
 
 if __name__ == '__main__':

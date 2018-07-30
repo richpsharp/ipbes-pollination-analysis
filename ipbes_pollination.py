@@ -443,7 +443,8 @@ def main():
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
 
-            # calculate prod_poll_dep_unrealized X1 from the figure
+            # calculate prod_poll_dep_unrealized X1 as
+            # prod_total - prod_poll_dep_realized
             prod_poll_dep_unrealized_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
                 f'prod_poll_dep_unrealized_{nutrient_id}_10s_'
@@ -474,6 +475,39 @@ def main():
             schedule_build_overviews(
                 task_graph, prod_poll_dep_unrealized_nut_scenario_path,
                 prod_poll_dep_unrealized_nut_scenario_task)
+
+            # calculate prod_total_realized as
+            #   prod_total_potential - prod_poll_dep_unrealized
+            prod_total_realized_nut_scenario_path = os.path.join(
+                OUTPUT_DIR,
+                f'prod_total_realized_{nutrient_id}_10s_'
+                f'{landcover_short_suffix}.tif')
+            prod_total_realized_nut_scenario_task = task_graph.add_task(
+                func=pygeoprocessing.raster_calculator,
+                args=([
+                    (prod_total_potential_path, 1),
+                    (prod_poll_dep_unrealized_nut_scenario_path, 1),
+                    (pygeoprocessing.get_raster_info(
+                        prod_total_potential_path)['nodata'][0], 'raw'),
+                    (pygeoprocessing.get_raster_info(
+                        prod_poll_dep_unrealized_nut_scenario_path)[
+                            'nodata'][0], 'raw'),
+                    (-1, 'raw')], sub_two_op,
+                    prod_total_realized_nut_scenario_path,
+                    gdal.GDT_Float32, -1),
+                target_path_list=[prod_total_realized_nut_scenario_path],
+                dependent_task_list=[
+                    prod_poll_dep_unrealized_nut_scenario_task,
+                    prod_total_potential_task],
+                task_name=f'''prod poll dep unrealized: {
+                    os.path.basename(
+                        prod_total_realized_nut_scenario_path)}''')
+            upload_blob(
+                task_graph, prod_total_realized_nut_scenario_path,
+                prod_total_realized_nut_scenario_task)
+            schedule_build_overviews(
+                task_graph, prod_total_realized_nut_scenario_path,
+                prod_total_realized_nut_scenario_task)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview

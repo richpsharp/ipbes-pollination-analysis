@@ -1199,17 +1199,16 @@ def threshold_select_raster(
             target_nodata):
         result = numpy.empty(select_array.shape, dtype=numpy.float32)
         result[:] = target_nodata
-        valid_mask = base_array != base_nodata
-        result[valid_mask] = numpy.where(
-            base_array[valid_mask] >= threshold_val,
-            select_array[valid_mask], 0)
+        valid_mask = (base_array != base_nodata) & (select_array == 1)
+        result[valid_mask] = numpy.interp(
+            base_array[valid_mask], [0, threshold_val], [0.0, 1.0], 0, 1)
         return result
 
     pygeoprocessing.raster_calculator(
         [(base_raster_path, 1), (select_raster_path, 1),
          (threshold_val, 'raw'), (base_nodata, 'raw'),
          (target_nodata, 'raw')], threshold_select_op,
-        target_path, gdal.GDT_Byte, target_nodata, gtiff_creation_options=(
+        target_path, gdal.GDT_Float32, target_nodata, gtiff_creation_options=(
             'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
             'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
             'NUM_THREADS=2'))

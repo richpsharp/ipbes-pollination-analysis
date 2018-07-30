@@ -200,14 +200,14 @@ def main():
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
         # total annual production of nutrient
         yield_total_nut_10km_path = os.path.join(
-            CHURN_DIR, 'yield_nutrient_rasters',
-            f'yield_total_{nutrient_id}_10km.tif')
+            CHURN_DIR, 'monfreda_2008_yield_nutrient_rasters',
+            f'monfreda_2008_yield_total_{nutrient_id}_10km.tif')
         yield_total_nut_10s_path = os.path.join(
-            CHURN_DIR, 'yield_nutrient_rasters',
-            f'yield_total_{nutrient_id}_10s.tif')
+            CHURN_DIR, 'monfreda_2008_yield_nutrient_rasters',
+            f'monfreda_2008_yield_total_{nutrient_id}_10s.tif')
         prod_total_nut_10s_path = os.path.join(
-            CHURN_DIR, 'prod_nutrient_rasters',
-            f'prod_total_{nutrient_id}_10s.tif')
+            CHURN_DIR, 'monfreda_2008_prod_nutrient_rasters',
+            f'monfreda_2008_prod_total_{nutrient_id}_10s.tif')
 
         prod_total_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
@@ -233,14 +233,14 @@ def main():
 
         # pollination-dependent annual production of nutrient
         poll_dep_yield_nut_10km_path = os.path.join(
-            CHURN_DIR, 'yield_poll_dep_rasters',
-            f'yield_poll_dep_{nutrient_id}_10km.tif')
+            CHURN_DIR, 'monfreda_2008_yield_poll_dep_rasters',
+            f'monfreda_2008_yield_poll_dep_{nutrient_id}_10km.tif')
         poll_dep_yield_nut_10s_path = os.path.join(
-            CHURN_DIR, 'yield_poll_dep_rasters',
-            f'yield_poll_dep_{nutrient_id}_10s.tif')
+            CHURN_DIR, 'monfreda_2008_yield_poll_dep_rasters',
+            f'monfreda_2008_yield_poll_dep_{nutrient_id}_10s.tif')
         poll_dep_prod_nut_10s_path = os.path.join(
-            CHURN_DIR, 'prod_poll_dep_rasters',
-            f'prod_poll_dep_total_{nutrient_id}_10s.tif')
+            CHURN_DIR, 'monfreda_2008_prod_poll_dep_rasters',
+            f'monfreda_2008_prod_poll_dep_{nutrient_id}_10s.tif')
         pol_dep_prod_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
@@ -308,14 +308,14 @@ def main():
             elif mask_prefix == 'ag':
                 ag_task_path_tuple = (mask_task, mask_target_path)
 
-        pollhab_2km_prop_on_ag_path = os.path.join(
+        pollhab_2km_prop_path = os.path.join(
             OUTPUT_DIR, 'pollhab_2km_prop',
-            f'pollhab_2km_prop_on_ag_{landcover_key}.tif')
+            f'pollhab_2km_prop_{landcover_key}.tif')
         prop_hab_area_2km_task = task_graph.add_task(
             func=pygeoprocessing.convolve_2d,
             args=[
                 (hab_task_path_tuple[1], 1), (kernel_raster_path, 1),
-                pollhab_2km_prop_on_ag_path],
+                pollhab_2km_prop_path],
             kwargs={
                 'working_dir': CHURN_DIR,
                 'gtiff_creation_options': (
@@ -324,15 +324,15 @@ def main():
                     'NUM_THREADS=2'),
                 'n_threads': 4},
             dependent_task_list=[hab_task_path_tuple[0], kernel_task],
-            target_path_list=[pollhab_2km_prop_on_ag_path],
+            target_path_list=[pollhab_2km_prop_path],
             task_name=(
                 'calculate proportional'
-                f' {os.path.basename(pollhab_2km_prop_on_ag_path)}'))
+                f' {os.path.basename(pollhab_2km_prop_path)}'))
         upload_blob(
-            task_graph, pollhab_2km_prop_on_ag_path,
+            task_graph, pollhab_2km_prop_path,
             prop_hab_area_2km_task)
         schedule_build_overviews(
-            task_graph, pollhab_2km_prop_on_ag_path,
+            task_graph, pollhab_2km_prop_path,
             prop_hab_area_2km_task)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
@@ -351,9 +351,9 @@ def main():
             CHURN_DIR, 'poll_suff_hab_ag_coverage_rasters',
             f'poll_suff_ag_coverage_mask_10s_{landcover_short_suffix}.tif')
         poll_suff_task = task_graph.add_task(
-            func=threshold_select_raster,
+            func=threshold_select_raster,  # TODO: change this to be continuous
             args=(
-                pollhab_2km_prop_on_ag_path,
+                pollhab_2km_prop_path,
                 ag_task_path_tuple[1], threshold_val,
                 pollinator_suff_hab_path),
             target_path_list=[pollinator_suff_hab_path],
@@ -372,46 +372,48 @@ def main():
             tot_prod_task, tot_prod_1d_path = (
                 prod_total_nut_10s_task_path_map[nutrient_id])
 
-            prod_total_path = os.path.join(
-                OUTPUT_DIR, f'''prod_total_{
+            prod_total_potential_path = os.path.join(
+                OUTPUT_DIR, f'''prod_total_potential_{
                     nutrient_id}_10s_{landcover_short_suffix}.tif''')
-            tot_prod_nut_scenario_task = task_graph.add_task(
+            prod_total_potential_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
                     ag_task_path_tuple[1], tot_prod_1d_path,
-                    prod_total_path),
-                target_path_list=[prod_total_path],
+                    prod_total_potential_path),
+                target_path_list=[prod_total_potential_path],
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
                 task_name=(
                     f'tot_prod_{nutrient_id}_10s_{landcover_short_suffix}'))
             upload_blob(
-                task_graph, prod_total_path, tot_prod_nut_scenario_task)
+                task_graph, prod_total_potential_path,
+                prod_total_potential_task)
             schedule_build_overviews(
-                task_graph, prod_total_path, tot_prod_nut_scenario_task)
+                task_graph, prod_total_potential_path,
+                prod_total_potential_task)
 
             poll_dep_prod_task, poll_dep_prod_path = (
                 poll_dep_prod_nut_10s_task_path_map[nutrient_id])
 
-            prod_poll_dep_total_nut_scenario_path = os.path.join(
+            prod_poll_dep_potential_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
-                f'prod_poll_dep_total_{nutrient_id}_10s_'
+                f'prod_poll_dep_potential_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             poll_dep_prod_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
                     ag_task_path_tuple[1], poll_dep_prod_path,
-                    prod_poll_dep_total_nut_scenario_path),
-                target_path_list=[prod_poll_dep_total_nut_scenario_path],
+                    prod_poll_dep_potential_nut_scenario_path),
+                target_path_list=[prod_poll_dep_potential_nut_scenario_path],
                 dependent_task_list=[
                     poll_dep_prod_task, ag_task_path_tuple[0]],
                 task_name=(
                     f'poll_dep_prod_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
             upload_blob(
-                task_graph, prod_poll_dep_total_nut_scenario_path,
+                task_graph, prod_poll_dep_potential_nut_scenario_path,
                 poll_dep_prod_nut_scenario_task)
             schedule_build_overviews(
-                task_graph, prod_poll_dep_total_nut_scenario_path,
+                task_graph, prod_poll_dep_potential_nut_scenario_path,
                 poll_dep_prod_nut_scenario_task)
 
             # prod_poll_dep_realized_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5:
@@ -425,7 +427,7 @@ def main():
             prod_poll_dep_realized_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
-                    prod_poll_dep_total_nut_scenario_path,
+                    prod_poll_dep_potential_nut_scenario_path,
                     pollinator_suff_hab_path,
                     prod_poll_dep_realized_nut_scenario_path),
                 target_path_list=[prod_poll_dep_realized_nut_scenario_path],
@@ -440,6 +442,38 @@ def main():
             schedule_build_overviews(
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
+
+            # calculate prod_poll_dep_unrealized X1 from the figure
+            prod_poll_dep_unrealized_nut_scenario_path = os.path.join(
+                OUTPUT_DIR,
+                f'prod_poll_dep_unrealized_{nutrient_id}_10s_'
+                f'{landcover_short_suffix}.tif')
+            prod_poll_dep_unrealized_nut_scenario_task = task_graph.add_task(
+                func=pygeoprocessing.raster_calculator,
+                args=([
+                    (prod_total_potential_path, 1),
+                    (prod_poll_dep_realized_nut_scenario_path, 1),
+                    (pygeoprocessing.get_raster_info(
+                        prod_total_potential_path)['nodata'][0], 'raw'),
+                    (pygeoprocessing.get_raster_info(
+                        prod_poll_dep_realized_nut_scenario_path)[
+                            'nodata'][0], 'raw'),
+                    (-1, 'raw')], sub_two_op,
+                    prod_poll_dep_unrealized_nut_scenario_path,
+                    gdal.GDT_Float32, -1),
+                target_path_list=[prod_poll_dep_unrealized_nut_scenario_path],
+                dependent_task_list=[
+                    prod_poll_dep_realized_nut_scenario_task,
+                    prod_total_potential_task],
+                task_name=f'''prod poll dep unrealized: {
+                    os.path.basename(
+                        prod_poll_dep_unrealized_nut_scenario_path)}''')
+            upload_blob(
+                task_graph, prod_poll_dep_unrealized_nut_scenario_path,
+                prod_poll_dep_unrealized_nut_scenario_task)
+            schedule_build_overviews(
+                task_graph, prod_poll_dep_unrealized_nut_scenario_path,
+                prod_poll_dep_unrealized_nut_scenario_task)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -824,6 +858,14 @@ def calculate_total_requirements(
         ((path, 1), (scalar, 'raw')) for path, scalar in zip(
             pop_path_list, nut_need_list)])), mult_and_sum, target_path,
         gdal.GDT_Float32, nodata)
+
+def sub_two_op(a_array, b_array, a_nodata, b_nodata, target_nodata):
+    """Subtract a from b and ignore nodata."""
+    result = numpy.empty_like(a_array)
+    result[:] = target_nodata
+    valid_mask = (a_array != a_nodata) & (b_array != b_nodata)
+    result[valid_mask] = a_array[valid_mask] - b_array[valid_mask]
+    return result
 
 
 def subtract_rasters(

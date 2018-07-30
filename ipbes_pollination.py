@@ -308,31 +308,31 @@ def main():
             elif mask_prefix == 'ag':
                 ag_task_path_tuple = (mask_task, mask_target_path)
 
-        proportional_hab_area_2km_path = os.path.join(
-            CHURN_DIR, 'proportional_area',
-            f'{landcover_key}_hab_prop_area_2km.tif')
+        pollhab_2km_prop_on_ag_path = os.path.join(
+            OUTPUT_DIR, 'pollhab_2km_prop',
+            f'pollhab_2km_prop_on_ag_{landcover_key}.tif')
         prop_hab_area_2km_task = task_graph.add_task(
             func=pygeoprocessing.convolve_2d,
             args=[
                 (hab_task_path_tuple[1], 1), (kernel_raster_path, 1),
-                proportional_hab_area_2km_path],
+                pollhab_2km_prop_on_ag_path],
             kwargs={
                 'working_dir': CHURN_DIR,
                 'gtiff_creation_options': (
                     'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                     'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
                     'NUM_THREADS=2'),
-                'n_threads': 2},
+                'n_threads': 4},
             dependent_task_list=[hab_task_path_tuple[0], kernel_task],
-            target_path_list=[proportional_hab_area_2km_path],
+            target_path_list=[pollhab_2km_prop_on_ag_path],
             task_name=(
                 'calculate proportional'
-                f' {os.path.basename(proportional_hab_area_2km_path)}'))
+                f' {os.path.basename(pollhab_2km_prop_on_ag_path)}'))
         upload_blob(
-            task_graph, proportional_hab_area_2km_path,
+            task_graph, pollhab_2km_prop_on_ag_path,
             prop_hab_area_2km_task)
         schedule_build_overviews(
-            task_graph, proportional_hab_area_2km_path,
+            task_graph, pollhab_2km_prop_on_ag_path,
             prop_hab_area_2km_task)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
@@ -353,7 +353,7 @@ def main():
         poll_suff_task = task_graph.add_task(
             func=threshold_select_raster,
             args=(
-                proportional_hab_area_2km_path,
+                pollhab_2km_prop_on_ag_path,
                 ag_task_path_tuple[1], threshold_val,
                 pollinator_suff_hab_path),
             target_path_list=[pollinator_suff_hab_path],

@@ -1013,7 +1013,7 @@ def google_bucket_fetch_and_validate(url, json_key_path, target_path):
     blob_id = url_matcher.group(2)
     LOGGER.debug(f'loading blob {blob_id} from {url}')
     blob = google.cloud.storage.Blob(
-        blob_id, bucket, chunk_size=2**24)
+        blob_id, bucket, chunk_size=2**18)
     LOGGER.info(f'downloading blob {target_path} from {url}')
     try:
         os.makedirs(os.path.dirname(target_path))
@@ -1047,7 +1047,7 @@ def google_bucket_upload(
         json_key_path)
     bucket = client.get_bucket(bucket_id)
     # limit chunk size so we don't try to load the entire thing into memory
-    blob = bucket.blob(blob_path, chunk_size=2**24)
+    blob = bucket.blob(blob_path, chunk_size=2**18)
     if blob.exists():
         crc32c = crcmod.predefined.Crc('crc-32c')
         with open(local_file_path, 'rb') as local_file:

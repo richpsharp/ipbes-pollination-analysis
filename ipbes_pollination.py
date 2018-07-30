@@ -4,6 +4,7 @@ Pollination analysis for IPBES.
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
     https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
+import base64
 import subprocess
 import sys
 import zipfile
@@ -24,6 +25,7 @@ import scipy.ndimage.morphology
 import reproduce
 import taskgraph
 import pygeoprocessing
+import crcmod
 
 # set a 1GB limit for the cache
 gdal.SetCacheMax(2**30)
@@ -59,12 +61,7 @@ N_WORKERS = max(1, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
-MERCURIAL_HASH_ID = subprocess.check_output(
-    ['hg', 'id', '--id']).strip().decode('utf-8')
-if MERCURIAL_HASH_ID.endswith('+'):
-    raise RuntimeError(
-        f'Repository must be clean before running: {MERCURIAL_HASH_ID}')
-BLOB_ROOT = f'''ipbes_pollination_result_{MERCURIAL_HASH_ID}'''
+BLOB_ROOT = f'''ipbes_pollination_result'''
 
 
 def main():
@@ -1051,11 +1048,19 @@ def google_bucket_upload(
     bucket = client.get_bucket(bucket_id)
     # limit chunk size so we don't try to load the entire thing into memory
     blob = bucket.blob(blob_path, chunk_size=2**24)
-    if not blob.exists():
-        LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
-        blob.upload_from_filename(local_file_path)
-    else:
-        LOGGER.info(f'not uploading {blob_path} exists')
+    if blob.exists():
+        crc32c = crcmod.predefined.Crc('crc-32c')
+        with open(local_file_path, 'rb') as local_file:
+            file_bytes = local_file.read(2**24)
+            crc32c.update(file_bytes)
+        local_crc_hash = base64.b64encode(crc32c.digest()).decode('utf-8')
+        if local_crc_hash == blob.crc32c:
+            LOGGER.info(
+                "crcs (%s) match for %s, no need to reupload",
+                local_crc_hash, blob.name)
+            return
+    LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
+    blob.upload_from_filename(local_file_path)
 
 
 def mask_codes_op(base_array, codes_array):

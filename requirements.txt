@@ -11,3 +11,4 @@ taskgraph>=0.5.1
 # psutil is used, but not required, by taskgraph to lower process priority
 psutil>=5.2.2
 reproduce>=0.0.5
+crcmod

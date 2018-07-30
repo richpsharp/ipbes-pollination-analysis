@@ -309,9 +309,9 @@ def main():
                 ag_task_path_tuple = (mask_task, mask_target_path)
 
         pollhab_2km_prop_path = os.path.join(
-            OUTPUT_DIR, 'pollhab_2km_prop',
+            CHURN_DIR, 'pollhab_2km_prop',
             f'pollhab_2km_prop_{landcover_key}.tif')
-        prop_hab_area_2km_task = task_graph.add_task(
+        pollhab_2km_prop_task = task_graph.add_task(
             func=pygeoprocessing.convolve_2d,
             args=[
                 (hab_task_path_tuple[1], 1), (kernel_raster_path, 1),
@@ -330,10 +330,33 @@ def main():
                 f' {os.path.basename(pollhab_2km_prop_path)}'))
         upload_blob(
             task_graph, pollhab_2km_prop_path,
-            prop_hab_area_2km_task)
+            pollhab_2km_prop_task)
         schedule_build_overviews(
             task_graph, pollhab_2km_prop_path,
-            prop_hab_area_2km_task)
+            pollhab_2km_prop_task)
+
+        # calculate pollhab_2km_prop_on_ag_10s by multiplying pollhab_2km_prop
+        # by the ag mask
+        pollhab_2km_prop_on_ag_path = os.path.join(
+            OUTPUT_DIR, f'''pollhab_2km_prop_on_ag_10s_{
+                landcover_short_suffix}.tif''')
+        pollhab_2km_prop_on_ag_task = task_graph.add_task(
+            func=mult_rasters,
+            args=(
+                ag_task_path_tuple[1], pollhab_2km_prop_path,
+                pollhab_2km_prop_on_ag_path),
+            target_path_list=[pollhab_2km_prop_on_ag_path],
+            dependent_task_list=[
+                pollhab_2km_prop_task, ag_task_path_tuple[0]],
+            task_name=(
+                f'''pollhab 2km prop on ag {
+                    os.path.basename(pollhab_2km_prop_on_ag_path)}'''))
+        upload_blob(
+            task_graph, pollhab_2km_prop_on_ag_path,
+            pollhab_2km_prop_on_ag_task)
+        schedule_build_overviews(
+            task_graph, pollhab_2km_prop_on_ag_path,
+            pollhab_2km_prop_on_ag_task)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
         #  evaluate whether there was sufficient pollinator habitat in the 2

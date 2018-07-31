@@ -701,7 +701,10 @@ def main():
                 target_path_list=[warp_path],
                 task_name=f'warp to raster {os.path.basename(warp_path)}')
             warp_task_list.append(warp_task)
+            upload_blob(task_graph, warp_path, warp_task)
             schedule_build_overviews(task_graph, warp_path, warp_task)
+            upload_blob(task_graph, base_path, warp_task)
+            schedule_build_overviews(task_graph, base_path, warp_task)
 
         for gpw_id in [
                 'gpw_v4_e_a000_014ft_2010_count',

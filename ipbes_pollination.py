@@ -841,8 +841,10 @@ def upload_blob(task_graph, base_path, dependent_task):
     blob_path = (
         os.path.join(BLOB_ROOT, os.path.relpath(
             base_path, WORKING_DIR)).replace(os.sep, '/'))
-    file_upload_touch_file = os.path.join(
-        CHURN_DIR, 'blob_upload_complete', blob_path.replace('/', '_'))
+    file_upload_touch_file = f'''{
+        os.path.join(
+            CHURN_DIR, 'blob_upload_complete',
+            blob_path.replace('/', '_'))}.complete'''
     _ = task_graph.add_task(
         func=google_bucket_upload,
         args=(
@@ -1162,6 +1164,7 @@ def google_bucket_upload(
             LOGGER.info(
                 "crcs (%s) match for %s, no need to reupload",
                 local_crc_hash, blob.name)
+            touch_file(file_upload_touch_file)
             return
         LOGGER.info(
             "crc blob (%s) local crc (%s) don't match",
@@ -1170,14 +1173,18 @@ def google_bucket_upload(
         blob.crc32c = local_crc_hash
     LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
     blob.upload_from_filename(local_file_path)
+    touch_file(file_upload_touch_file)
 
+
+def touch_file(touch_file_path):
+    """Touch the file at `touch_file_path` and makedirs if necessary."""
     # touch a file to indicate upload was successful
     try:
-        os.makedirs(os.path.dirname(file_upload_touch_file))
+        os.makedirs(os.path.dirname(touch_file_path))
     except OSError:
         pass
-    with open(file_upload_touch_file, 'a'):
-        os.utime(file_upload_touch_file, None)
+    with open(touch_file_path, 'a'):
+        os.utime(touch_file_path, None)
 
 
 def mask_codes_op(base_array, codes_array):

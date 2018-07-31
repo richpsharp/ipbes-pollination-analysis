@@ -1159,6 +1159,8 @@ def google_bucket_upload(
             blob.crc32c, local_crc_hash)
     LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
     blob.upload_from_filename(local_file_path)
+    assert blob.crc32c == local_crc_hash, "%s == %s" % (
+        blob.crc32c == local_crc_hash)
 
 
 def mask_codes_op(base_array, codes_array):

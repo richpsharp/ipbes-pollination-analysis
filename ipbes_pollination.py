@@ -1147,8 +1147,11 @@ def google_bucket_upload(
         crc32c = crcmod.predefined.Crc('crc-32c')
         LOGGER.info("blob exists: %s (%s)", blob, crc32c)
         with open(local_file_path, 'rb') as local_file:
-            file_bytes = local_file.read(2**24).strip()
-            crc32c.update(file_bytes)
+            while True:
+                file_bytes = local_file.read(2**18)
+                if not file_bytes:
+                    break
+                crc32c.update(file_bytes)
         local_crc_hash = base64.b64encode(crc32c.digest()).decode('utf-8')
         if local_crc_hash == blob.crc32c:
             LOGGER.info(

@@ -1143,6 +1143,7 @@ def google_bucket_upload(
     blob = bucket.blob(blob_path, chunk_size=2**18)
     if blob.exists():
         blob.update()
+        original_blob_crc = blob.crc32c
         crc32c = crcmod.predefined.Crc('crc-32c')
         LOGGER.info("blob exists: %s (%s)", blob, crc32c)
         with open(local_file_path, 'rb') as local_file:
@@ -1159,8 +1160,8 @@ def google_bucket_upload(
             blob.crc32c, local_crc_hash)
     LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
     blob.upload_from_filename(local_file_path)
-    assert blob.crc32c == local_crc_hash, "%s == %s" % (
-        blob.crc32c, local_crc_hash)
+    assert blob.crc32c == local_crc_hash, "%s != %s (original %s)" % (
+        blob.crc32c, local_crc_hash, original_blob_crc)
 
 
 def mask_codes_op(base_array, codes_array):

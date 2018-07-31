@@ -660,7 +660,9 @@ def main():
             task_name=f'calc gpw 15-65 {gender_id}')
         gpw_task_path_id_map[f'gpw_v4_e_a015_065{gender_id}t_2010_count'] = (
             gpw_15_65f_count_task, gpw_v4_e_a15_65t_2010_count_path)
-
+        upload_blob(
+            task_graph, gpw_v4_e_a15_65t_2010_count_path,
+            gpw_15_65f_count_task)
         schedule_build_overviews(
             task_graph, gpw_v4_e_a15_65t_2010_count_path,
             gpw_15_65f_count_task)

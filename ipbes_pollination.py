@@ -1154,6 +1154,9 @@ def google_bucket_upload(
                 "crcs (%s) match for %s, no need to reupload",
                 local_crc_hash, blob.name)
             return
+        LOGGER.info(
+            "crc blob (%s) local crc (%s) don't match",
+            blob.crc32c, local_crc_hash)
     LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
     blob.upload_from_filename(local_file_path)
 

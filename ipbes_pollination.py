@@ -900,7 +900,7 @@ def calculate_total_requirements(
         array_stack = None
 
         # sometimes this array is empty, check first before reshaping
-        if valid_array_elements:
+        if valid_array_elements.size != 0:
             valid_array_elements = valid_array_elements.reshape(
                 -1, numpy.count_nonzero(valid_mask))
             # multiply each element of the scalar with each row of the valid

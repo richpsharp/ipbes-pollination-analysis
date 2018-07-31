@@ -637,7 +637,7 @@ def main():
     # 0-14 and 65plus
     for gender_id in ['f', 'm']:
         gpw_v4_e_a15_65t_2010_count_path = os.path.join(
-            WORKING_DIR, 'gpw_count',
+            CHURN_DIR, 'gpw_count',
             f'gpw_v4_e_a015_065{gender_id}_2010_count.tif')
         gpw_15_65f_count_task = task_graph.add_task(
             func=subtract_rasters,

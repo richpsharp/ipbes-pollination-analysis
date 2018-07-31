@@ -891,7 +891,7 @@ def calculate_total_requirements(
         scalar_list = numpy.array(arg_list[1::2])
         # make a valid mask as big as a single array
         valid_mask = numpy.logical_and.reduce(
-            array_stack == pop_nodata, axis=0)
+            array_stack != pop_nodata, axis=0)
 
         # mask out all invalid elements but reshape so there's still the same
         # number of arrays

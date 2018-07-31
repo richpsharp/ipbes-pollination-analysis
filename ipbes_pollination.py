@@ -1158,8 +1158,10 @@ def google_bucket_upload(
         LOGGER.info(
             "crc blob (%s) local crc (%s) don't match",
             blob.crc32c, local_crc_hash)
+        blob.delete()
     LOGGER.info(f'uploading blob {local_file_path} to {blob_path}')
     blob.upload_from_filename(local_file_path)
+    blob.update()
     assert blob.crc32c == local_crc_hash, "%s != %s (original %s)" % (
         blob.crc32c, local_crc_hash, original_blob_crc)
 

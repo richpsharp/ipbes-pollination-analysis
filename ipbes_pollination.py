@@ -715,7 +715,7 @@ def main():
             gpw_task, gpw_tot_count_path = (
                 gpw_task_path_id_map[gpw_id])
             ssp_pop_path = os.path.join(
-                WORKING_DIR, 'gpw_ssp_rasters', f'ssp{ssp_id}_{gpw_id}.tif')
+                CHURN_DIR, 'gpw_ssp_rasters', f'ssp{ssp_id}_{gpw_id}.tif')
 
             ssp_pop_task = task_graph.add_task(
                 func=calculate_future_pop,
@@ -726,6 +726,7 @@ def main():
                 target_path_list=[ssp_pop_path],
                 task_name=f'ssp pop {os.path.basename(ssp_pop_path)}')
             ssp_task_pop_map[(ssp_id, gpw_id)] = (ssp_pop_task, ssp_pop_path)
+            upload_blob(task_graph, ssp_pop_path, ssp_pop_task)
             schedule_build_overviews(task_graph, ssp_pop_path, ssp_pop_task)
 
     # 2)
@@ -754,7 +755,7 @@ def main():
 
         tot_nut_requirements_path = os.path.join(
             OUTPUT_DIR,
-            f'nut_req_local_{nut_id}_10s_cur.tif')
+            f'nut_req_{nut_id}_10s_cur.tif')
         total_requirements_task = task_graph.add_task(
             func=calculate_total_requirements,
             args=(

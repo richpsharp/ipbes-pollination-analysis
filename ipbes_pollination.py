@@ -406,6 +406,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_total_potential_path,
                 prod_total_potential_task)
+            schedule_aggregate_to_degree(
+                task_graph, prod_total_potential_path, numpy.sum,
+                prod_total_potential_task)
 
             poll_dep_prod_task, poll_dep_prod_path = (
                 poll_dep_prod_nut_10s_task_path_map[nutrient_id])
@@ -428,6 +431,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_potential_nut_scenario_path,
                 prod_poll_dep_potential_nut_scenario_task)
+            schedule_aggregate_to_degree(
+                task_graph, prod_poll_dep_potential_nut_scenario_path,
+                numpy.sum, prod_poll_dep_potential_nut_scenario_task)
 
             # pollination independent
             prod_poll_indep_nut_scenario_path = os.path.join(
@@ -450,6 +456,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_indep_nut_scenario_path,
                 prod_poll_indep_nut_scenario_task)
+            schedule_aggregate_to_degree(
+                task_graph, prod_poll_indep_nut_scenario_path,
+                numpy.sum, prod_poll_indep_nut_scenario_task)
 
             # prod_poll_dep_realized_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5:
             # pollination-dependent annual production of energy (KJ/yr),
@@ -474,6 +483,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
+            schedule_aggregate_to_degree(
+                task_graph, prod_poll_dep_realized_nut_scenario_path,
+                numpy.sum, prod_poll_dep_realized_nut_scenario_task)
 
             # nat_cont_poll_en|va|fo|avg_10s|1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to pollination,"" or the realized
@@ -501,6 +513,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, nat_cont_poll_nut_path,
                 nat_cont_poll_nut_task)
+            schedule_aggregate_to_degree(
+                task_graph, nat_cont_poll_nut_path,
+                numpy.average, nat_cont_poll_nut_task)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
@@ -528,6 +543,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_unrealized_nut_scenario_path,
                 prod_poll_dep_unrealized_nut_scenario_task)
+            schedule_aggregate_to_degree(
+                task_graph, prod_poll_dep_unrealized_nut_scenario_path,
+                numpy.sum, prod_poll_dep_unrealized_nut_scenario_task)
 
             # calculate prod_total_realized as
             #   prod_total_potential - prod_poll_dep_unrealized
@@ -555,6 +573,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_total_realized_nut_scenario_path,
                 prod_total_realized_nut_scenario_task)
+            schedule_aggregate_to_degree(
+                task_graph, prod_total_realized_nut_scenario_path,
+                numpy.sum, prod_total_realized_nut_scenario_task)
 
             # poll_cont_prod_en|va|fo|10s|cur|ssp1|ssp3|ssp5: pollination's
             # contribution to production, or the realized
@@ -580,6 +601,9 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, poll_cont_prod_nut_path,
                 poll_cont_prod_nut_task)
+            schedule_aggregate_to_degree(
+                task_graph, poll_cont_prod_nut_path,
+                numpy.average, poll_cont_prod_nut_task)
 
         nat_cont_poll_avg_path = os.path.join(
             OUTPUT_DIR, f'nat_cont_poll_avg_{landcover_short_suffix}.tif')
@@ -595,6 +619,9 @@ def main():
                 os.path.basename(nat_cont_poll_avg_path)}''')
         schedule_upload_blob_and_overviews(
             task_graph, nat_cont_poll_avg_path, nat_cont_poll_avg_task)
+        schedule_aggregate_to_degree(
+            task_graph, nat_cont_poll_avg_path,
+            numpy.average, nat_cont_poll_avg_task)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -837,6 +864,9 @@ def main():
         schedule_upload_blob_and_overviews(
             task_graph, tot_nut_requirements_path,
             total_requirements_task)
+        schedule_aggregate_to_degree(
+            task_graph, tot_nut_requirements_path,
+            numpy.sum, total_requirements_task)
 
         # calculate ssp needs
         for ssp_id in (1, 3, 5):
@@ -860,6 +890,9 @@ def main():
                 priority=100,)
             schedule_upload_blob_and_overviews(
                 task_graph, nut_req_path, nut_req_task)
+            schedule_aggregate_to_degree(
+                task_graph, nut_req_path,
+                numpy.sum, nut_req_task)
 
     task_graph.close()
     task_graph.join()
@@ -1674,6 +1707,88 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
         [(raster_a_path, 1), (raster_b_path, 1), (nodata_a, 'raw'),
          (nodata_b, 'raw'), (_MULT_NODATA, 'raw')], _mult_raster_op,
         target_path, gdal.GDT_Float32, _MULT_NODATA)
+
+
+def schedule_aggregate_to_degree(
+        task_graph, base_raster_path, aggregate_func, base_raster_task):
+    """Schedule an aggregate and upload of 1D approximation."""
+    one_degree_raster_path = base_raster_path.replace('_10s_', '_1d_')
+    one_degree_task = task_graph.add_task(
+        func=aggregate_to_degree,
+        args=(base_raster_path, aggregate_func, one_degree_raster_path),
+        target_path_list=[one_degree_raster_path],
+        dependent_task_list=[base_raster_task],
+        task_name=f'to degree {os.path.basename(one_degree_raster_path)}')
+    upload_blob(task_graph, one_degree_raster_path, one_degree_task)
+
+
+def aggregate_to_degree(raster_path, aggregate_func, target_path):
+    """Aggregate input raster to a degree.
+
+    Parameters:
+        base_raster_path (string): path to a WGS84 projected raster.
+        target_path (string): path to desired target raster that will be
+            an aggregated version of `base_raster_path` by the function
+            `aggregate_func`.
+
+    Returns:
+        None.
+
+    """
+    base_raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
+    base_gt = base_raster.GetGeoTransform()
+    base_band = base_raster.GetRasterBand(1)
+    base_nodata = base_band.GetNoDataValue()
+
+    wgs84sr = osr.SpatialReference()
+    wgs84sr.ImportFromEPSG(4326)
+
+    driver = gdal.GetDriverByName('GTiff')
+    n_rows = int(
+        abs((base_gt[5] * base_band.YSize) / 1.0))
+    n_cols = int(
+        abs((base_gt[1] * base_band.XSize) / -1.0))
+    target_raster = driver.Create(
+        target_path, n_cols, n_rows, 1, gdal.GDT_Float32)
+    target_raster.SetProjection(wgs84sr.ExportToWkt())
+    degree_geotransform = [base_gt[0], 1., 0., base_gt[3], 0., -1.]
+    target_raster.SetGeoTransform(degree_geotransform)
+    target_band = target_raster.GetRasterBand(1)
+    target_band.SetNoDataValue(base_nodata)
+    target_band.Fill(base_nodata)
+
+    base_y_winsize = int(round(abs(1. / base_gt[5])))
+    base_x_winsize = int(round(abs(1. / base_gt[1])))
+
+    last_time = time.time()
+    for row_index in range(n_rows):
+        lat_coord = (
+            degree_geotransform[3] + degree_geotransform[5] * row_index)
+        base_y_coord = int((lat_coord - base_gt[3]) / base_gt[5])
+        target_y_coord = int(
+            (lat_coord - degree_geotransform[3]) / degree_geotransform[5])
+        for col_index in range(n_cols):
+            long_coord = (
+                degree_geotransform[0] + degree_geotransform[1] * col_index)
+            base_x_coord = int((long_coord - base_gt[0]) / base_gt[1])
+            target_x_coord = int(
+                (long_coord - degree_geotransform[0]) / degree_geotransform[1])
+
+            base_array = base_band.ReadAsArray(
+                xoff=base_x_coord, yoff=base_y_coord,
+                win_xsize=base_x_winsize, win_ysize=base_y_winsize)
+            valid_array = ~numpy.isclose(base_array, base_nodata)
+            if valid_array.any():
+                target_band.WriteArray(
+                    numpy.array([[aggregate_func(base_array[valid_array])]]),
+                    xoff=target_x_coord, yoff=target_y_coord)
+
+            current_time = time.time()
+            if (current_time - last_time) > 5.0:
+                LOGGER.info(
+                    "%.2f%% complete", 100.0 * float(row_index+1) / n_rows)
+                last_time = current_time
+    LOGGER.info("100%% complete")
 
 
 if __name__ == '__main__':

@@ -982,7 +982,7 @@ def average_rasters(*raster_list):
     def average_op(*array_list):
         result = numpy.empty_like(array_list[0])
         result[:] = target_nodata
-        valid_mask = numpy.ones(result.shape)
+        valid_mask = numpy.ones(result.shape, dtype=numpy.bool)
         for array, nodata in zip(array_list, nodata_list):
             valid_mask &= array != nodata
         array_stack = numpy.stack(array_list)

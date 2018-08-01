@@ -988,8 +988,8 @@ def average_rasters(*raster_list):
         array_stack = numpy.stack(array_list)
         result[valid_mask] = numpy.average(
             array_stack[numpy.broadcast_to(
-                valid_mask, array_stack.shape).reshape(
-                    len(array_list), -1)], axis=0)
+                valid_mask, array_stack.shape)].reshape(
+                    len(array_list), -1), axis=0)
         return result
 
     pygeoprocessing.raster_calculator(

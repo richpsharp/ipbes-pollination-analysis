@@ -386,6 +386,7 @@ def main():
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
         # and folate (mg/yr)
         nat_cont_task_path_map = {}
+        poll_cont_prod_map = {}
         for nutrient_id in ['en', 'va', 'fo']:
             tot_prod_task, tot_prod_1d_path = (
                 prod_total_nut_10s_task_path_map[nutrient_id])
@@ -478,8 +479,7 @@ def main():
             # contribution to pollination,"" or the realized
             # pollination-dependent production (prod_poll_dep_realized) over
             # potential pollination-dependent production
-            # (prod_poll_dep_potential), for each micronutrient or for the
-            # average (avg) of all three
+            # (prod_poll_dep_potential)
 
             nat_cont_poll_nut_path = os.path.join(
                 OUTPUT_DIR, f'''nat_cont_poll_{nutrient_id}_10s_{
@@ -555,6 +555,31 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_total_realized_nut_scenario_path,
                 prod_total_realized_nut_scenario_task)
+
+            # poll_cont_prod_en|va|fo|10s|cur|ssp1|ssp3|ssp5: pollination's
+            # contribution to production, or the realized
+            # pollination-dependent production (prod_poll_dep_realized) over
+            # total realized production (prod_total_realized)
+            poll_cont_prod_nut_path = os.path.join(
+                OUTPUT_DIR, f'''poll_cont_prod_{nutrient_id}_10s_{
+                    landcover_short_suffix}.tif''')
+            poll_cont_prod_nut_task = task_graph.add_task(
+                func=calculate_raster_ratio,
+                args=(
+                    prod_poll_dep_realized_nut_scenario_path,
+                    prod_total_realized_nut_scenario_path,
+                    poll_cont_prod_nut_path),
+                target_path_list=[poll_cont_prod_nut_path],
+                dependent_task_list=[
+                    prod_poll_dep_realized_nut_scenario_task,
+                    prod_total_realized_nut_scenario_task],
+                task_name=f'''nature contribution {
+                    os.path.basename(poll_cont_prod_nut_path)}''')
+            poll_cont_prod_map[nutrient_id] = (
+                poll_cont_prod_nut_task, poll_cont_prod_nut_path)
+            schedule_upload_blob_and_overviews(
+                task_graph, poll_cont_prod_nut_path,
+                poll_cont_prod_nut_task)
 
         nat_cont_poll_avg_path = os.path.join(
             OUTPUT_DIR, f'nat_cont_poll_avg_{landcover_short_suffix}.tif')

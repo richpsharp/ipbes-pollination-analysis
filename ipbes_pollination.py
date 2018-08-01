@@ -1020,7 +1020,7 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
     target_nodata = -1.
 
     def ratio_op(array_a, array_b):
-        result = numpy.empty(array_a, dtype=numpy.float32)
+        result = numpy.empty(array_a.shape, dtype=numpy.float32)
         result[:] = target_nodata
         zero_mask = numpy.isclose(array_b, 0.)
         valid_mask = (

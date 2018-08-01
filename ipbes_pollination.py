@@ -1032,7 +1032,7 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
 
     pygeoprocessing.raster_calculator(
         [(raster_a_path, 1), (raster_b_path, 1)], ratio_op,
-        target_raster_path)
+        target_raster_path, gdal.GDT_Float32, target_nodata)
 
 
 def warp_to_raster(

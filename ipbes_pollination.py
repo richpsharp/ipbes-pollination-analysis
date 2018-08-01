@@ -385,6 +385,7 @@ def main():
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
         # and folate (mg/yr)
+        nat_cont_task_path_map = {}
         for nutrient_id in ['en', 'va', 'fo']:
             tot_prod_task, tot_prod_1d_path = (
                 prod_total_nut_10s_task_path_map[nutrient_id])
@@ -412,7 +413,7 @@ def main():
                 OUTPUT_DIR,
                 f'prod_poll_dep_potential_{nutrient_id}_10s_'
                 f'{landcover_short_suffix}.tif')
-            poll_dep_prod_nut_scenario_task = task_graph.add_task(
+            prod_poll_dep_potential_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
                     ag_task_path_tuple[1], poll_dep_prod_path,
@@ -425,7 +426,7 @@ def main():
                     f'10s_{landcover_short_suffix}'))
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_potential_nut_scenario_path,
-                poll_dep_prod_nut_scenario_task)
+                prod_poll_dep_potential_nut_scenario_task)
 
             # pollination independent
             prod_poll_indep_nut_scenario_path = os.path.join(
@@ -441,7 +442,7 @@ def main():
                 target_path_list=[prod_poll_indep_nut_scenario_path],
                 dependent_task_list=[
                     prod_total_potential_task,
-                    poll_dep_prod_nut_scenario_task],
+                    prod_poll_dep_potential_nut_scenario_task],
                 task_name=(
                     f'prod_poll_indep_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
@@ -465,13 +466,37 @@ def main():
                     prod_poll_dep_realized_nut_scenario_path),
                 target_path_list=[prod_poll_dep_realized_nut_scenario_path],
                 dependent_task_list=[
-                    poll_suff_task, poll_dep_prod_nut_scenario_task],
+                    poll_suff_task, prod_poll_dep_potential_nut_scenario_task],
                 task_name=(
                     f'prod_poll_dep_realized_{nutrient_id}_'
                     f'10s_{landcover_short_suffix}'))
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
+
+            # nat_cont_poll_en|va|fo|avg_10s|1d_cur|ssp1|ssp3|ssp5: "nature's
+            # contribution to pollination,"" or the realized
+            # pollination-dependent production (prod_poll_dep_realized) over
+            # potential pollination-dependent production
+            # (prod_poll_dep_potential), for each micronutrient or for the
+            # average (avg) of all three
+
+            nat_cont_poll_nut_path = os.path.join(
+                OUTPUT_DIR, f'nat_cont_poll_{nutrient_id}_10s.tif')
+            nat_cont_poll_nut_task = task_graph.add_task(
+                func=calculate_raster_ratio,
+                args=(
+                    prod_poll_dep_realized_nut_scenario_path,
+                    prod_poll_dep_potential_nut_scenario_path,
+                    nat_cont_poll_nut_path),
+                target_path_list=[nat_cont_poll_nut_path],
+                dependent_task_list=[
+                    prod_poll_dep_realized_nut_scenario_task,
+                    prod_poll_dep_potential_nut_scenario_task],
+                task_name=f'''nature contribution {
+                    os.path.basename(nat_cont_poll_nut_path)}''')
+            nat_cont_task_path_map[nutrient_id] = (
+                nat_cont_poll_nut_task, nat_cont_poll_nut_task)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
@@ -974,6 +999,40 @@ def subtract_3_rasters(
     pygeoprocessing.raster_calculator(
         [(raster_path_a, 1), (raster_path_b, 1), (raster_path_c, 1)],
         sub_op, target_path, gdal.GDT_Float32, target_nodata)
+
+
+def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
+    """Calculate the ratio of a:b and ignore nodata and divide by 0.
+
+    Parameters:
+        raster_a_path (string): path to numerator of ratio
+        raster_b_path (string): path to denominator of ratio
+        target_raster_path (string): path to desired target raster that will
+            use a nodata value of -1.
+
+    Returns:
+        None.
+
+    """
+    nodata_a = pygeoprocessing.get_raster_info(raster_a_path)['nodata'][0]
+    nodata_b = pygeoprocessing.get_raster_info(raster_b_path)['nodata'][0]
+    target_nodata = -1.
+
+    def ratio_op(array_a, array_b):
+        result = numpy.empty(array_a, dtype=numpy.float32)
+        result[:] = target_nodata
+        zero_mask = numpy.isclose(array_b, 0.)
+        valid_mask = (
+            ~numpy.isclose(array_a, nodata_a) &
+            ~numpy.isclose(array_b, nodata_b) &
+            ~zero_mask)
+        result[valid_mask] = array_a[valid_mask] / array_b[valid_mask]
+        result[zero_mask] = 0.0
+        return result
+
+    pygeoprocessing.raster_calculator(
+        [(raster_a_path, 1), (raster_b_path, 1)], ratio_op,
+        target_raster_path)
 
 
 def warp_to_raster(

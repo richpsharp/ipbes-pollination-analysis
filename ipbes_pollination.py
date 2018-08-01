@@ -482,7 +482,8 @@ def main():
             # average (avg) of all three
 
             nat_cont_poll_nut_path = os.path.join(
-                OUTPUT_DIR, f'nat_cont_poll_{nutrient_id}_10s.tif')
+                OUTPUT_DIR, f'''nat_cont_poll_{nutrient_id}_10s_{
+                    landcover_short_suffix}.tif''')
             nat_cont_poll_nut_task = task_graph.add_task(
                 func=calculate_raster_ratio,
                 args=(

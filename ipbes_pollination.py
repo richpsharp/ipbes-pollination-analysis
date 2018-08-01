@@ -511,7 +511,7 @@ def main():
             prod_poll_dep_unrealized_nut_scenario_task = task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
                 args=([
-                    (prod_total_potential_path, 1),
+                    (prod_poll_dep_potential_nut_scenario_path, 1),
                     (prod_poll_dep_realized_nut_scenario_path, 1),
                     (_MULT_NODATA, 'raw'),
                     (_MULT_NODATA, 'raw'),
@@ -521,7 +521,7 @@ def main():
                 target_path_list=[prod_poll_dep_unrealized_nut_scenario_path],
                 dependent_task_list=[
                     prod_poll_dep_realized_nut_scenario_task,
-                    prod_total_potential_task],
+                    prod_poll_dep_potential_nut_scenario_task],
                 task_name=f'''prod poll dep unrealized: {
                     os.path.basename(
                         prod_poll_dep_unrealized_nut_scenario_path)}''')
@@ -544,7 +544,7 @@ def main():
                     (_MULT_NODATA, 'raw'),
                     (_MULT_NODATA, 'raw')], sub_two_op,
                     prod_total_realized_nut_scenario_path,
-                    gdal.GDT_Float32, -1),
+                    gdal.GDT_Float32, _MULT_NODATA),
                 target_path_list=[prod_total_realized_nut_scenario_path],
                 dependent_task_list=[
                     prod_poll_dep_unrealized_nut_scenario_task,
@@ -573,7 +573,7 @@ def main():
                 dependent_task_list=[
                     prod_poll_dep_realized_nut_scenario_task,
                     prod_total_realized_nut_scenario_task],
-                task_name=f'''nature contribution {
+                task_name=f'''poll cont {
                     os.path.basename(poll_cont_prod_nut_path)}''')
             poll_cont_prod_map[nutrient_id] = (
                 poll_cont_prod_nut_task, poll_cont_prod_nut_path)

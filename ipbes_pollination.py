@@ -497,7 +497,10 @@ def main():
                 task_name=f'''nature contribution {
                     os.path.basename(nat_cont_poll_nut_path)}''')
             nat_cont_task_path_map[nutrient_id] = (
-                nat_cont_poll_nut_task, nat_cont_poll_nut_task)
+                nat_cont_poll_nut_task, nat_cont_poll_nut_path)
+            schedule_upload_blob_and_overviews(
+                task_graph, nat_cont_poll_nut_path,
+                nat_cont_poll_nut_task)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
@@ -552,6 +555,21 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_total_realized_nut_scenario_path,
                 prod_total_realized_nut_scenario_task)
+
+        nat_cont_poll_avg_path = os.path.join(
+            OUTPUT_DIR, f'nat_cont_poll_avg_{landcover_short_suffix}.tif')
+        nat_cont_poll_avg_task = task_graph.add_task(
+            func=average_rasters,
+            args=tuple(
+                [x[1] for x in nat_cont_task_path_map.values()] +
+                [nat_cont_poll_avg_path]),
+            target_path_list=[nat_cont_poll_avg_path],
+            dependent_task_list=[
+                x[0] for x in nat_cont_task_path_map.values()],
+            task_name=f'''avg nat cont poll {
+                os.path.basename(nat_cont_poll_avg_path)}''')
+        schedule_upload_blob_and_overviews(
+            task_graph, nat_cont_poll_avg_path, nat_cont_poll_avg_task)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
@@ -952,6 +970,27 @@ def sub_two_op(a_array, b_array, a_nodata, b_nodata, target_nodata):
     valid_mask = (a_array != a_nodata) & (b_array != b_nodata)
     result[valid_mask] = a_array[valid_mask] - b_array[valid_mask]
     return result
+
+
+def average_rasters(*raster_list):
+    """Average rasters in raster list except write to the last one."""
+    nodata_list = [
+        pygeoprocessing.get_raster_info(path)['nodata'][0]
+        for path in raster_list[::-1]]
+    target_nodata = -1.
+
+    def average(*array_list):
+        result = numpy.empty_like(array_list[0])
+        result[:] = target_nodata
+        valid_mask = numpy.ones(result.shape)
+        for array, nodata in zip(array_list, nodata_list):
+            valid_mask &= array != nodata
+        array_stack = numpy.stack(array_list)
+        result[valid_mask] = numpy.average(
+            array_stack[numpy.broadcast_to(
+                valid_mask, array_stack.shape).reshape(
+                    len(array_list), -1)], axis=0)
+        return result
 
 
 def subtract_2_rasters(

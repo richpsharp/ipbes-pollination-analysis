@@ -976,10 +976,10 @@ def average_rasters(*raster_list):
     """Average rasters in raster list except write to the last one."""
     nodata_list = [
         pygeoprocessing.get_raster_info(path)['nodata'][0]
-        for path in raster_list[::-1]]
+        for path in raster_list[:-1]]
     target_nodata = -1.
 
-    def average(*array_list):
+    def average_op(*array_list):
         result = numpy.empty_like(array_list[0])
         result[:] = target_nodata
         valid_mask = numpy.ones(result.shape)
@@ -991,6 +991,10 @@ def average_rasters(*raster_list):
                 valid_mask, array_stack.shape).reshape(
                     len(array_list), -1)], axis=0)
         return result
+
+    pygeoprocessing.raster_calculator(
+        [(path, 1) for path in raster_list[:-1]], average_op,
+        raster_list[-1], gdal.GDT_Float32, target_nodata)
 
 
 def subtract_2_rasters(

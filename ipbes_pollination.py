@@ -985,7 +985,7 @@ def average_rasters(*raster_list):
         valid_mask = numpy.ones(result.shape, dtype=numpy.bool)
         for array, nodata in zip(array_list, nodata_list):
             valid_mask &= array != nodata
-        if any(valid_mask):
+        if valid_mask.any():
             array_stack = numpy.stack(array_list)
             result[valid_mask] = numpy.average(
                 array_stack[numpy.broadcast_to(

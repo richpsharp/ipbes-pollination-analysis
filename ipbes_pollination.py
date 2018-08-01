@@ -985,11 +985,12 @@ def average_rasters(*raster_list):
         valid_mask = numpy.ones(result.shape, dtype=numpy.bool)
         for array, nodata in zip(array_list, nodata_list):
             valid_mask &= array != nodata
-        array_stack = numpy.stack(array_list)
-        result[valid_mask] = numpy.average(
-            array_stack[numpy.broadcast_to(
-                valid_mask, array_stack.shape)].reshape(
-                    len(array_list), -1), axis=0)
+        if any(valid_mask):
+            array_stack = numpy.stack(array_list)
+            result[valid_mask] = numpy.average(
+                array_stack[numpy.broadcast_to(
+                    valid_mask, array_stack.shape)].reshape(
+                        len(array_list), -1), axis=0)
         return result
 
     pygeoprocessing.raster_calculator(

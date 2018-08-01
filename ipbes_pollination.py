@@ -997,7 +997,7 @@ def calculate_future_pop(
     def _future_pop_op(cur_array, fut_array, count_array):
         """Calculate future pop by dividing fut/cur*cur_count."""
         result = numpy.empty(cur_array.shape, dtype=numpy.float32)
-        result[:] = count_nodata
+        result[:] = target_nodata
         zero_mask = cur_array == 0
         valid_mask = (
             (cur_array != ssp_cur_nodata) &

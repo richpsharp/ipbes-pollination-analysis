@@ -500,7 +500,7 @@ def main():
                     task_graph, prod_poll_dep_realized_nut_scenario_path,
                     numpy.sum, prod_poll_dep_realized_nut_scenario_task))
             prod_poll_dep_realized_1d_task_path_map[
-                (nutrient_id, landcover_short_suffix)] = (
+                (landcover_short_suffix, nutrient_id)] = (
                     prod_poll_dep_realized_1d_task,
                     prod_poll_dep_realized_nut_scenario_1d_path)
             upload_blob(

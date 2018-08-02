@@ -626,6 +626,25 @@ def main():
             task_graph, nat_cont_poll_avg_path,
             numpy.average, nat_cont_poll_avg_task)
 
+        poll_cont_prod_avg_path = os.path.join(
+            OUTPUT_DIR, f'''poll_cont_prod_avg_10s_{
+                landcover_short_suffix}.tif''')
+        poll_cont_prod_nutavg_task = task_graph.add_task(
+            func=average_rasters,
+            args=tuple(
+                [x[1] for x in poll_cont_prod_map.values()] +
+                [poll_cont_prod_avg_path]),
+            target_path_list=[poll_cont_prod_avg_path],
+            dependent_task_list=[
+                x[0] for x in poll_cont_prod_map.values()],
+            task_name=f'''avg nat cont poll {
+                os.path.basename(poll_cont_prod_avg_path)}''')
+        schedule_upload_blob_and_overviews(
+            task_graph, poll_cont_prod_avg_path, poll_cont_prod_nutavg_task)
+        schedule_aggregate_to_degree(
+            task_graph, poll_cont_prod_avg_path,
+            numpy.average, poll_cont_prod_nutavg_task)
+
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview
     #   Nutrition provided by wild pollinators on each pixel of agricultural

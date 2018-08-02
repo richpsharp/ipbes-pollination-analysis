@@ -1058,7 +1058,7 @@ def schedule_upload_blob_and_overviews(
     overview_task = task_graph.add_task(
         func=build_overviews,
         priority=-100,
-        args=(base_raster_path, 'near'),
+        args=(base_raster_path, 'nearest'),
         target_path_list=[target_overview_path],
         dependent_task_list=[base_raster_task],
         task_name=f'overviews {os.path.basename(base_raster_path)}')
@@ -1279,7 +1279,7 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
         raster_a_path)['pixel_size']
     pygeoprocessing.align_and_resize_raster_stack(
         [raster_a_path, raster_b_path],
-        [raster_a_aligned_path, raster_b_aligned_path], ['nearest']*2,
+        [raster_a_aligned_path, raster_b_aligned_path], ['near']*2,
         target_pixel_size, 'intersection')
 
     nodata_a = pygeoprocessing.get_raster_info(

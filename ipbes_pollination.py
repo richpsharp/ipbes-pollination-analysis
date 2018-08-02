@@ -1018,14 +1018,14 @@ def main():
         task_graph.add_task(
             func=average_rasters,
             args=tuple(
-                [x[1] for x in prod_poll_dep_1d_task_path_map[
-                    (scenario_id, nut_id)] for nut_id in ('en', 'fo', 'va')] +
+                [prod_poll_dep_1d_task_path_map[(scenario_id, nut_id)][1]
+                 for nut_id in ('en', 'fo', 'va')] +
                 [poll_cont_nut_req_avg_1d_path]),
             kwargs={'clamp': 1.0},
             target_path_list=[poll_cont_nut_req_avg_1d_path],
             dependent_task_list=[
-                x[0] for x in prod_poll_dep_1d_task_path_map[
-                    (scenario_id, nut_id)] for nut_id in ('en', 'fo', 'va')],
+                prod_poll_dep_1d_task_path_map[(scenario_id, nut_id)][0]
+                for nut_id in ('en', 'fo', 'va')],
             task_name=f'''poll cont nut avg 1d {
                 os.path.basename(poll_cont_nut_req_avg_1d_path)}''')
 

@@ -381,9 +381,19 @@ def main():
                 os.path.basename(pollinator_suff_hab_path)}""")
         schedule_upload_blob_and_overviews(
             task_graph, pollinator_suff_hab_path, poll_suff_task)
-        schedule_aggregate_to_degree(
-            task_graph, pollinator_suff_hab_path, numpy.average,
-            poll_suff_task)
+        poll_suff_hab_ag_avg_path = os.path.join(
+            OUTPUT_DIR,
+            f'poll_suff_ag_coverage_1d_{landcover_short_suffix}.tif')
+        one_degree_task = task_graph.add_task(
+            func=aggregate_to_degree,
+            args=(
+                pollinator_suff_hab_path, numpy.average,
+                poll_suff_hab_ag_avg_path),
+            target_path_list=[pollinator_suff_hab_path],
+            dependent_task_list=[poll_suff_task],
+            task_name=f'''to degree {
+                os.path.basename(pollinator_suff_hab_path)}''')
+        upload_blob(task_graph, pollinator_suff_hab_path, one_degree_task)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),

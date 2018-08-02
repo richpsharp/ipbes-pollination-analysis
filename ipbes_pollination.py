@@ -274,6 +274,7 @@ def main():
         target_path_list=[kernel_raster_path],
         task_name='make convolution kernel')
 
+    prod_poll_dep_realized_1d_task_path_map = {}
     # mask landcover into agriculture and pollinator habitat
     for landcover_key, (landcover_url, landcover_short_suffix) in (
             landcover_data.items()):
@@ -390,18 +391,18 @@ def main():
             args=(
                 pollinator_suff_hab_path, numpy.average,
                 poll_suff_hab_ag_avg_path),
-            target_path_list=[pollinator_suff_hab_path],
+            target_path_list=[poll_suff_hab_ag_avg_path],
             dependent_task_list=[poll_suff_task],
             task_name=f'''to degree {
                 os.path.basename(pollinator_suff_hab_path)}''')
-        upload_blob(task_graph, pollinator_suff_hab_path, one_degree_task)
+        upload_blob(task_graph, poll_suff_hab_ag_avg_path, one_degree_task)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
         # and folate (mg/yr)
         nat_cont_task_path_map = {}
         poll_cont_prod_map = {}
-        for nutrient_id in ['en', 'va', 'fo']:
+        for nutrient_id in ('en', 'va', 'fo'):
             tot_prod_task, tot_prod_1d_path = (
                 prod_total_nut_10s_task_path_map[nutrient_id])
 
@@ -497,9 +498,19 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
-            schedule_aggregate_to_degree(
-                task_graph, prod_poll_dep_realized_nut_scenario_path,
-                numpy.sum, prod_poll_dep_realized_nut_scenario_task)
+
+            (prod_poll_dep_realized_one_degree_task,
+             prod_poll_dep_realized_nut_scenario_1d_path) = (
+                schedule_aggregate_to_degree(
+                    task_graph, prod_poll_dep_realized_nut_scenario_path,
+                    numpy.sum, prod_poll_dep_realized_nut_scenario_task))
+            prod_poll_dep_realized_1d_task_path_map[
+                (nutrient_id, landcover_short_suffix)] = (
+                    prod_poll_dep_realized_one_degree_task,
+                    prod_poll_dep_realized_nut_scenario_1d_path)
+            upload_blob(
+                task_graph, prod_poll_dep_realized_nut_scenario_1d_path,
+                prod_poll_dep_realized_one_degree_task)
 
             # nat_cont_poll_en|va|fo|avg_10s|1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to pollination,"" or the realized
@@ -874,6 +885,8 @@ def main():
         'gpw_v4_e_a065plusft_2010_count': {'va': 500, 'fo': 400, 'en': 1876},
         'gpw_v4_e_a065plusmt_2010_count': {'va': 600, 'fo': 400, 'en': 2318},
     }
+
+    prod_poll_dep_1d_task_path_map = {}
     for nut_id in ('en', 'va', 'fo'):
         # calculate 'cur' needs
         pop_task_path_list, nut_need_list = zip(*[
@@ -897,9 +910,30 @@ def main():
         schedule_upload_blob_and_overviews(
             task_graph, tot_nut_requirements_path,
             total_requirements_task)
-        schedule_aggregate_to_degree(
+        tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
             task_graph, tot_nut_requirements_path,
             numpy.sum, total_requirements_task)
+
+        # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
+        # contribution to nutrition," the contribution of wild pollination to
+        # local nutritional adequacy, as a ratio of the realized
+        # pollinator-derived production (prod_poll_dep_realized) to total
+        # dietary requirements (nut_req) for energy, vitamin A, and folate
+        prod_poll_dep_1d_task, prod_poll_dep_1d_path = (
+            prod_poll_dep_realized_1d_task_path_map[('cur', nut_id)])
+        poll_cont_nut_req_path = os.path.join(
+            OUTPUT_DIR, f'poll_cont_nut_req_{nut_id}_1d_cur.tif')
+        poll_cont_nut_task = task_graph.add_task(
+            func=calculate_raster_ratio,
+            args=(
+                prod_poll_dep_1d_path, tot_nut_deg_path,
+                poll_cont_nut_req_path),
+            target_path_list=[poll_cont_nut_req_path],
+            dependent_task_list=[tot_nut_deg_task, prod_poll_dep_1d_task],
+            task_name=f'''nature cont to nut {
+                os.path.basename(poll_cont_nut_req_path)}''')
+        prod_poll_dep_1d_task_path_map[('cur', nut_id)] = (
+            poll_cont_nut_task, poll_cont_nut_req_path)
 
         # calculate ssp needs
         for ssp_id in (1, 3, 5):
@@ -923,9 +957,51 @@ def main():
                 priority=100,)
             schedule_upload_blob_and_overviews(
                 task_graph, nut_req_path, nut_req_task)
-            schedule_aggregate_to_degree(
+            tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
+
+            # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
+            # contribution to nutrition," the contribution of wild pollination
+            # to local nutritional adequacy, as a ratio of the realized
+            # pollinator-derived production (prod_poll_dep_realized) to total
+            # dietary requirements (nut_req) for energy, vitamin A, and folate
+            prod_poll_dep_1d_task, prod_poll_dep_1d_path = (
+                prod_poll_dep_realized_1d_task_path_map[
+                    (f'ssp{ssp_id}', nut_id)])
+            poll_cont_nut_req_path = os.path.join(
+                OUTPUT_DIR, f'poll_cont_nut_req_{nut_id}_1d_ssp{ssp_id}.tif')
+            poll_cont_nut_task = task_graph.add_task(
+                func=calculate_raster_ratio,
+                args=(
+                    prod_poll_dep_1d_path, tot_nut_deg_path,
+                    poll_cont_nut_req_path),
+                target_path_list=[poll_cont_nut_req_path],
+                dependent_task_list=[tot_nut_deg_task, prod_poll_dep_1d_task],
+                task_name=f'''nature cont to nut {
+                    os.path.basename(poll_cont_nut_req_path)}''')
+            prod_poll_dep_1d_task_path_map[(f'ssp{ssp_id}', nut_id)] = (
+                poll_cont_nut_task, poll_cont_nut_req_path)
+
+    for scenario_id in ('cur', 'ssp1', 'ssp3', 'ssp5'):
+        # poll_cont_nut_req_avg_1d_cur|ssp1|ssp3|ssp5: average contribution of
+        # wild pollination to local nutritional adequacy, across all three
+        # nutrients, with each nutrient capped at 1
+        poll_cont_nut_req_avg_1d_path = os.path.join(
+            OUTPUT_DIR, f'poll_cont_nut_req_avg_1d_{scenario_id}.tif')
+        task_graph.add_task(
+            func=average_rasters,
+            args=tuple(
+                [x[1] for x in prod_poll_dep_1d_task_path_map[
+                    (scenario_id, nut_id)] for nut_id in ('en', 'fo', 'va')] +
+                [poll_cont_nut_req_avg_1d_path]),
+            kwargs={'clamp': 1.0},
+            target_path_list=[poll_cont_nut_req_avg_1d_path],
+            dependent_task_list=[
+                x[0] for x in prod_poll_dep_1d_task_path_map[
+                    (scenario_id, nut_id)] for nut_id in ('en', 'fo', 'va')],
+            task_name=f'''poll cont nut avg 1d {
+                os.path.basename(poll_cont_nut_req_avg_1d_path)}''')
 
     task_graph.close()
     task_graph.join()
@@ -1063,12 +1139,12 @@ def sub_two_op(a_array, b_array, a_nodata, b_nodata, target_nodata):
     return result
 
 
-def average_rasters(*raster_list, cap=None):
+def average_rasters(*raster_list, clamp=None):
     """Average rasters in raster list except write to the last one.
 
     Parameters:
         raster_list (list of string): list of rasters to average over.
-        cap (float): value to cap the individual raster to before the average.
+        clamp (float): value to clamp the individual raster to before the average.
 
     Returns:
         None.
@@ -1083,17 +1159,17 @@ def average_rasters(*raster_list, cap=None):
         result = numpy.empty_like(array_list[0])
         result[:] = target_nodata
         valid_mask = numpy.ones(result.shape, dtype=numpy.bool)
-        capped_list = []
+        clamped_list = []
         for array, nodata in zip(array_list, nodata_list):
             valid_mask &= array != nodata
-            if cap:
-                capped_list.append(
-                    numpy.where(array > cap, cap, array))
+            if clamp:
+                clamped_list.append(
+                    numpy.where(array > clamp, clamp, array))
             else:
-                capped_list.append(array)
+                clamped_list.append(array)
 
         if valid_mask.any():
-            array_stack = numpy.stack(capped_list)
+            array_stack = numpy.stack(clamped_list)
             result[valid_mask] = numpy.average(
                 array_stack[numpy.broadcast_to(
                     valid_mask, array_stack.shape)].reshape(
@@ -1776,6 +1852,7 @@ def schedule_aggregate_to_degree(
         dependent_task_list=[base_raster_task],
         task_name=f'to degree {os.path.basename(one_degree_raster_path)}')
     upload_blob(task_graph, one_degree_raster_path, one_degree_task)
+    return (one_degree_task, one_degree_raster_path)
 
 
 def aggregate_to_degree(raster_path, aggregate_func, target_path):

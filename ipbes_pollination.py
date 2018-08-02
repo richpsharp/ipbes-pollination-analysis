@@ -644,6 +644,7 @@ def main():
             args=tuple(
                 [x[1] for x in poll_cont_prod_map.values()] +
                 [poll_cont_prod_avg_path]),
+            kwargs={'cap': 1.0},
             target_path_list=[poll_cont_prod_avg_path],
             dependent_task_list=[
                 x[0] for x in poll_cont_prod_map.values()],
@@ -1062,8 +1063,17 @@ def sub_two_op(a_array, b_array, a_nodata, b_nodata, target_nodata):
     return result
 
 
-def average_rasters(*raster_list):
-    """Average rasters in raster list except write to the last one."""
+def average_rasters(*raster_list, cap=None):
+    """Average rasters in raster list except write to the last one.
+
+    Parameters:
+        raster_list (list of string): list of rasters to average over.
+        cap (float): value to cap the individual raster to before the average.
+
+    Returns:
+        None.
+
+    """
     nodata_list = [
         pygeoprocessing.get_raster_info(path)['nodata'][0]
         for path in raster_list[:-1]]
@@ -1073,10 +1083,17 @@ def average_rasters(*raster_list):
         result = numpy.empty_like(array_list[0])
         result[:] = target_nodata
         valid_mask = numpy.ones(result.shape, dtype=numpy.bool)
+        capped_list = []
         for array, nodata in zip(array_list, nodata_list):
             valid_mask &= array != nodata
+            if cap:
+                capped_list.append(
+                    numpy.where(array > cap, cap, array))
+            else:
+                capped_list.append(array)
+
         if valid_mask.any():
-            array_stack = numpy.stack(array_list)
+            array_stack = numpy.stack(capped_list)
             result[valid_mask] = numpy.average(
                 array_stack[numpy.broadcast_to(
                     valid_mask, array_stack.shape)].reshape(

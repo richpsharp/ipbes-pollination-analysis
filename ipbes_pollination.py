@@ -644,7 +644,6 @@ def main():
             args=tuple(
                 [x[1] for x in poll_cont_prod_map.values()] +
                 [poll_cont_prod_avg_path]),
-            kwargs={'cap': 1.0},
             target_path_list=[poll_cont_prod_avg_path],
             dependent_task_list=[
                 x[0] for x in poll_cont_prod_map.values()],

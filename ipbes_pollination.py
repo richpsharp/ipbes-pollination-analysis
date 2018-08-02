@@ -369,7 +369,7 @@ def main():
             CHURN_DIR, 'poll_suff_hab_ag_coverage_rasters',
             f'poll_suff_ag_coverage_mask_10s_{landcover_short_suffix}.tif')
         poll_suff_task = task_graph.add_task(
-            func=threshold_select_raster,  # TODO: change this to be continuous
+            func=threshold_select_raster,
             args=(
                 pollhab_2km_prop_path,
                 ag_task_path_tuple[1], threshold_val,
@@ -381,6 +381,9 @@ def main():
                 os.path.basename(pollinator_suff_hab_path)}""")
         schedule_upload_blob_and_overviews(
             task_graph, pollinator_suff_hab_path, poll_suff_task)
+        schedule_aggregate_to_degree(
+            task_graph, pollinator_suff_hab_path, numpy.average,
+            poll_suff_task)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
@@ -606,7 +609,7 @@ def main():
                 numpy.average, poll_cont_prod_nut_task)
 
         nat_cont_poll_avg_path = os.path.join(
-            OUTPUT_DIR, f'nat_cont_poll_avg_{landcover_short_suffix}.tif')
+            OUTPUT_DIR, f'nat_cont_poll_avg_10s_{landcover_short_suffix}.tif')
         nat_cont_poll_avg_task = task_graph.add_task(
             func=average_rasters,
             args=tuple(

@@ -383,18 +383,10 @@ def main():
                 os.path.basename(pollinator_suff_hab_path)}""")
         schedule_upload_blob_and_overviews(
             task_graph, pollinator_suff_hab_path, poll_suff_task)
-        poll_suff_hab_ag_avg_path = os.path.join(
-            OUTPUT_DIR,
-            f'poll_suff_ag_coverage_1d_{landcover_short_suffix}.tif')
-        one_degree_task = task_graph.add_task(
-            func=aggregate_to_degree,
-            args=(
-                pollinator_suff_hab_path, numpy.average,
-                poll_suff_hab_ag_avg_path),
-            target_path_list=[poll_suff_hab_ag_avg_path],
-            dependent_task_list=[poll_suff_task],
-            task_name=f'''to degree {
-                os.path.basename(pollinator_suff_hab_path)}''')
+        one_degree_task, poll_suff_hab_ag_avg_path = (
+            schedule_aggregate_to_degree(
+                task_graph, pollinator_suff_hab_path, numpy.average,
+                poll_suff_task))
         upload_blob(task_graph, poll_suff_hab_ag_avg_path, one_degree_task)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
@@ -402,6 +394,7 @@ def main():
         # and folate (mg/yr)
         nat_cont_task_path_map = {}
         poll_cont_prod_map = {}
+        poll_cont_1d_prod_map = {}
         for nutrient_id in ('en', 'va', 'fo'):
             tot_prod_task, tot_prod_1d_path = (
                 prod_total_nut_10s_task_path_map[nutrient_id])
@@ -446,9 +439,11 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_potential_nut_scenario_path,
                 prod_poll_dep_potential_nut_scenario_task)
-            schedule_aggregate_to_degree(
-                task_graph, prod_poll_dep_potential_nut_scenario_path,
-                numpy.sum, prod_poll_dep_potential_nut_scenario_task)
+            (prod_poll_dep_potential_nut_scenario_1d_task,
+             prod_poll_dep_potential_nut_scenario_1d_path) = (
+                schedule_aggregate_to_degree(
+                    task_graph, prod_poll_dep_potential_nut_scenario_path,
+                    numpy.sum, prod_poll_dep_potential_nut_scenario_task))
 
             # pollination independent
             prod_poll_indep_nut_scenario_path = os.path.join(
@@ -499,25 +494,24 @@ def main():
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
                 prod_poll_dep_realized_nut_scenario_task)
 
-            (prod_poll_dep_realized_one_degree_task,
+            (prod_poll_dep_realized_1d_task,
              prod_poll_dep_realized_nut_scenario_1d_path) = (
                 schedule_aggregate_to_degree(
                     task_graph, prod_poll_dep_realized_nut_scenario_path,
                     numpy.sum, prod_poll_dep_realized_nut_scenario_task))
             prod_poll_dep_realized_1d_task_path_map[
                 (nutrient_id, landcover_short_suffix)] = (
-                    prod_poll_dep_realized_one_degree_task,
+                    prod_poll_dep_realized_1d_task,
                     prod_poll_dep_realized_nut_scenario_1d_path)
             upload_blob(
                 task_graph, prod_poll_dep_realized_nut_scenario_1d_path,
-                prod_poll_dep_realized_one_degree_task)
+                prod_poll_dep_realized_1d_task)
 
             # nat_cont_poll_en|va|fo|avg_10s|1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to pollination,"" or the realized
             # pollination-dependent production (prod_poll_dep_realized) over
             # potential pollination-dependent production
             # (prod_poll_dep_potential)
-
             nat_cont_poll_nut_path = os.path.join(
                 OUTPUT_DIR, f'''nat_cont_poll_{nutrient_id}_10s_{
                     landcover_short_suffix}.tif''')
@@ -531,16 +525,32 @@ def main():
                 dependent_task_list=[
                     prod_poll_dep_realized_nut_scenario_task,
                     prod_poll_dep_potential_nut_scenario_task],
-                task_name=f'''nature contribution {
+                task_name=f'''nature contribution 10s {
                     os.path.basename(nat_cont_poll_nut_path)}''')
             nat_cont_task_path_map[nutrient_id] = (
                 nat_cont_poll_nut_task, nat_cont_poll_nut_path)
             schedule_upload_blob_and_overviews(
                 task_graph, nat_cont_poll_nut_path,
                 nat_cont_poll_nut_task)
-            schedule_aggregate_to_degree(
+
+            nat_cont_poll_nut_path = os.path.join(
+                OUTPUT_DIR, f'''nat_cont_poll_{nutrient_id}_1d_{
+                    landcover_short_suffix}.tif''')
+            nat_cont_poll_nut_task = task_graph.add_task(
+                func=calculate_raster_ratio,
+                args=(
+                    prod_poll_dep_realized_nut_scenario_1d_path,
+                    prod_poll_dep_potential_nut_scenario_1d_path,
+                    nat_cont_poll_nut_path),
+                target_path_list=[nat_cont_poll_nut_path],
+                dependent_task_list=[
+                    prod_poll_dep_realized_1d_task,
+                    prod_poll_dep_potential_nut_scenario_1d_task],
+                task_name=f'''nature contribution {
+                    os.path.basename(nat_cont_poll_nut_path)}''')
+            schedule_upload_blob_and_overviews(
                 task_graph, nat_cont_poll_nut_path,
-                numpy.average, nat_cont_poll_nut_task)
+                nat_cont_poll_nut_task)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
@@ -598,9 +608,11 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_total_realized_nut_scenario_path,
                 prod_total_realized_nut_scenario_task)
-            schedule_aggregate_to_degree(
-                task_graph, prod_total_realized_nut_scenario_path,
-                numpy.sum, prod_total_realized_nut_scenario_task)
+            (prod_total_realized_nut_1d_scenario_task,
+             prod_total_realized_nut_1d_scenario_path) = (
+                schedule_aggregate_to_degree(
+                    task_graph, prod_total_realized_nut_scenario_path,
+                    numpy.sum, prod_total_realized_nut_scenario_task))
 
             # poll_cont_prod_en|va|fo|10s|cur|ssp1|ssp3|ssp5: pollination's
             # contribution to production, or the realized
@@ -626,32 +638,32 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, poll_cont_prod_nut_path,
                 poll_cont_prod_nut_task)
-            schedule_aggregate_to_degree(
-                task_graph, poll_cont_prod_nut_path,
-                numpy.average, poll_cont_prod_nut_task)
 
-        nat_cont_poll_avg_path = os.path.join(
-            OUTPUT_DIR, f'nat_cont_poll_avg_10s_{landcover_short_suffix}.tif')
-        nat_cont_poll_avg_task = task_graph.add_task(
-            func=average_rasters,
-            args=tuple(
-                [x[1] for x in nat_cont_task_path_map.values()] +
-                [nat_cont_poll_avg_path]),
-            target_path_list=[nat_cont_poll_avg_path],
-            dependent_task_list=[
-                x[0] for x in nat_cont_task_path_map.values()],
-            task_name=f'''avg nat cont poll {
-                os.path.basename(nat_cont_poll_avg_path)}''')
-        schedule_upload_blob_and_overviews(
-            task_graph, nat_cont_poll_avg_path, nat_cont_poll_avg_task)
-        schedule_aggregate_to_degree(
-            task_graph, nat_cont_poll_avg_path,
-            numpy.average, nat_cont_poll_avg_task)
+            poll_cont_prod_nut_1d_path = os.path.join(
+                OUTPUT_DIR, f'''poll_cont_prod_{nutrient_id}_1d_{
+                    landcover_short_suffix}.tif''')
+            poll_cont_prod_nut_task = task_graph.add_task(
+                func=calculate_raster_ratio,
+                args=(
+                    prod_poll_dep_realized_nut_scenario_1d_path,
+                    prod_total_realized_nut_1d_scenario_path,
+                    poll_cont_prod_nut_1d_path),
+                target_path_list=[poll_cont_prod_nut_1d_path],
+                dependent_task_list=[
+                    prod_poll_dep_realized_1d_task,
+                    prod_total_realized_nut_1d_scenario_task],
+                task_name=f'''poll cont {
+                    os.path.basename(poll_cont_prod_nut_1d_path)}''')
+            poll_cont_1d_prod_map[nutrient_id] = (
+                poll_cont_prod_nut_task, poll_cont_prod_nut_1d_path)
+            schedule_upload_blob_and_overviews(
+                task_graph, poll_cont_prod_nut_1d_path,
+                poll_cont_prod_nut_task)
 
         poll_cont_prod_avg_path = os.path.join(
             OUTPUT_DIR, f'''poll_cont_prod_avg_10s_{
                 landcover_short_suffix}.tif''')
-        poll_cont_prod_nutavg_task = task_graph.add_task(
+        poll_cont_prod_nut_avg_task = task_graph.add_task(
             func=average_rasters,
             args=tuple(
                 [x[1] for x in poll_cont_prod_map.values()] +
@@ -662,10 +674,24 @@ def main():
             task_name=f'''avg nat cont poll {
                 os.path.basename(poll_cont_prod_avg_path)}''')
         schedule_upload_blob_and_overviews(
-            task_graph, poll_cont_prod_avg_path, poll_cont_prod_nutavg_task)
-        schedule_aggregate_to_degree(
-            task_graph, poll_cont_prod_avg_path,
-            numpy.average, poll_cont_prod_nutavg_task)
+            task_graph, poll_cont_prod_avg_path, poll_cont_prod_nut_avg_task)
+
+        poll_cont_prod_1d_avg_path = os.path.join(
+            OUTPUT_DIR, f'''poll_cont_prod_avg_1d_{
+                landcover_short_suffix}.tif''')
+        poll_cont_prod_1d_nut_avg_task = task_graph.add_task(
+            func=average_rasters,
+            args=tuple(
+                [x[1] for x in poll_cont_1d_prod_map.values()] +
+                [poll_cont_prod_1d_avg_path]),
+            target_path_list=[poll_cont_prod_1d_avg_path],
+            dependent_task_list=[
+                x[0] for x in poll_cont_1d_prod_map.values()],
+            task_name=f'''avg nat cont poll 1d {
+                os.path.basename(poll_cont_prod_1d_avg_path)}''')
+        schedule_upload_blob_and_overviews(
+            task_graph, poll_cont_prod_1d_avg_path,
+            poll_cont_prod_1d_nut_avg_task)
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview

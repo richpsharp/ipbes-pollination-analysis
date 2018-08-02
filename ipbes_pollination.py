@@ -1058,7 +1058,7 @@ def schedule_upload_blob_and_overviews(
     overview_task = task_graph.add_task(
         func=build_overviews,
         priority=-100,
-        args=(base_raster_path, 'nearest'),
+        args=(base_raster_path, 'near'),
         target_path_list=[target_overview_path],
         dependent_task_list=[base_raster_task],
         task_name=f'overviews {os.path.basename(base_raster_path)}')

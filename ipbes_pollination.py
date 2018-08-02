@@ -4,6 +4,7 @@ Pollination analysis for IPBES.
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
     https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
+import shutil
 import base64
 import sys
 import zipfile
@@ -13,6 +14,7 @@ import re
 import logging
 import itertools
 import multiprocessing
+import tempfile
 
 from osgeo import gdal
 import google.cloud.client
@@ -1268,8 +1270,22 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
         None.
 
     """
-    nodata_a = pygeoprocessing.get_raster_info(raster_a_path)['nodata'][0]
-    nodata_b = pygeoprocessing.get_raster_info(raster_b_path)['nodata'][0]
+    temp_dir = tempfile.mkdtemp()
+    raster_a_aligned_path = os.path.join(
+        temp_dir, os.path.basename(raster_a_path))
+    raster_b_aligned_path = os.path.join(
+        temp_dir, os.path.basename(raster_b_path))
+    target_pixel_size = pygeoprocessing.get_raster_info(
+        raster_a_path)['pixel_size']
+    pygeoprocessing.align_and_resize_raster_stack(
+        [raster_a_path, raster_b_path],
+        [raster_a_aligned_path, raster_b_aligned_path], ['nearest']*2,
+        target_pixel_size, 'intersection')
+
+    nodata_a = pygeoprocessing.get_raster_info(
+        raster_a_aligned_path)['nodata'][0]
+    nodata_b = pygeoprocessing.get_raster_info(
+        raster_b_aligned_path)['nodata'][0]
     target_nodata = -1.
 
     def ratio_op(array_a, array_b):
@@ -1285,8 +1301,10 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
         return result
 
     pygeoprocessing.raster_calculator(
-        [(raster_a_path, 1), (raster_b_path, 1)], ratio_op,
+        [(raster_a_aligned_path, 1), (raster_b_aligned_path, 1)], ratio_op,
         target_raster_path, gdal.GDT_Float32, target_nodata)
+
+    shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def warp_to_raster(

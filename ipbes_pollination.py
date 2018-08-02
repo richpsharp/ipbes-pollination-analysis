@@ -319,6 +319,7 @@ def main():
                 pollhab_2km_prop_path],
             kwargs={
                 'working_dir': CHURN_DIR,
+                'ignore_nodata': True,
                 'gtiff_creation_options': (
                     'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=DEFLATE',
                     'PREDICTOR=3', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
@@ -1424,11 +1425,6 @@ def touch_file(touch_file_path):
         os.utime(touch_file_path, None)
 
 
-def mask_codes_op(base_array, codes_array):
-    """Return a bool raster if value in base_array is in codes_array."""
-    return numpy.isin(base_array, codes_array)
-
-
 def threshold_select_raster(
         base_raster_path, select_raster_path, threshold_val, target_path):
     """Select `select` if `base` >= `threshold_val`.
@@ -1499,6 +1495,18 @@ def mask_raster(base_path, codes, target_path):
             range(x[0], x[1]+1) if isinstance(x, tuple) else [x]
             for x in codes] for item in sublist])
     LOGGER.debug(f'expanded code array {code_list}')
+
+    base_nodata = pygeoprocessing.get_raster_info(base_path)['nodata'][0]
+    mask_nodata = 2
+
+    def mask_codes_op(base_array, codes_array):
+        """Return a bool raster if value in base_array is in codes_array."""
+        result = numpy.empty(base_array.shape, dtype=numpy.int8)
+        result[:] = mask_nodata
+        valid_mask = base_array != base_nodata
+        result[valid_mask] = numpy.isin(
+            base_array[valid_mask], codes_array)
+        return result
 
     pygeoprocessing.raster_calculator(
         [(base_path, 1), (code_list, 'raw')], mask_codes_op, target_path,

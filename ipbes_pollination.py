@@ -1183,7 +1183,7 @@ def main():
     for field_name in ['country', 'region']:
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTString))
-    for field_name in ['meanPCTu5', 'meanUW']:
+    for field_name in ['PCTU5', 'UW']:
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
     for field_name in summary_raster_path_map:
@@ -1213,10 +1213,11 @@ def main():
             if hunger_feature.GetGeometryRef().Intersects(
                     grid_feature_geom):
                 grid_feature.SetField(
-                    'meanPCTu5', hunger_feature.GetField('PCTU5'))
+                    'PCTU5', hunger_feature.GetField('PCTU5'))
                 grid_feature.SetField(
-                    'meanUW', hunger_feature.GetField('UW'))
+                    'UW', hunger_feature.GetField('UW'))
                 break
+        target_summary_grid_layer.SetFeature(grid_feature)
 
     # this one does the rasters
     for field_name, raster_path in summary_raster_path_map.items():

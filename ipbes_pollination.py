@@ -1133,7 +1133,7 @@ def main():
     target_summary_grid_layer = target_summary_grid_vector.GetLayer()
 
     tm_world_borders_path = os.path.join(
-        ECOSHARD_DIR, 'TM_WORLD_BORDERS_SIMPL-0.3.shp')
+        ECOSHARD_DIR, 'TM_WORLD_BORDERS-0.3.shp')
     print(os.path.exists(tm_world_borders_path))
     tm_world_borders_vector = gdal.OpenEx(
         tm_world_borders_path, gdal.OF_VECTOR)

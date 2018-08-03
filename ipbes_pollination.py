@@ -1190,6 +1190,35 @@ def main():
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
 
+    for feature_index in range(
+            target_summary_grid_layer.GetFeatureCount()):
+        grid_feature = target_summary_grid_layer.GetFeature(feature_index)
+        grid_feature_geom = grid_feature.GetGeometryRef()
+
+        # this is a lazy loop because i am tired. needs spatial indexing
+        # to not take a very long time
+        for country_feature in tm_feature_list:
+            if country_feature.GetGeometryRef().Intersects(
+                    grid_feature_geom):
+                country_name = country_feature.GetField('name')
+                grid_feature.SetField('country', country_name)
+                try:
+                    grid_feature.SetField(
+                        'region', country_to_region_dict[country_name])
+                except KeyError:
+                    grid_feature.SetField('region', 'UNKNOWN')
+                break
+
+        for hunger_feature in hunger_feature_list:
+            if hunger_feature.GetGeometryRef().Intersects(
+                    grid_feature_geom):
+                grid_feature.SetField(
+                    'meanPCTu5', hunger_feature.GetField('PCTU5'))
+                grid_feature.SetField(
+                    'meanUW', hunger_feature.GetField('UW'))
+                break
+
+    # this one does the rasters
     for field_name, raster_path in summary_raster_path_map.items():
         raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
         band = raster.GetRasterBand(1)
@@ -1200,29 +1229,6 @@ def main():
                 target_summary_grid_layer.GetFeatureCount()):
             grid_feature = target_summary_grid_layer.GetFeature(feature_index)
             grid_feature_geom = grid_feature.GetGeometryRef()
-
-            # this is a lazy loop because i am tired. needs spatial indexing
-            # to not take a very long time
-            for country_feature in tm_feature_list:
-                if country_feature.GetGeometryRef().Intersects(
-                        grid_feature_geom):
-                    country_name = country_feature.GetField('name')
-                    grid_feature.SetField('country', country_name)
-                    try:
-                        grid_feature.SetField(
-                            'region', country_to_region_dict[country_name])
-                    except KeyError:
-                        grid_feature.SetField('region', 'UNKNOWN')
-                    break
-
-            for hunger_feature in hunger_feature_list:
-                if hunger_feature.GetGeometryRef().Intersects(
-                        grid_feature_geom):
-                    grid_feature.SetField(
-                        'meanPCTu5', hunger_feature.GetField('PCTU5'))
-                    grid_feature.SetField(
-                        'meanUW', hunger_feature.GetField('UW'))
-                    break
 
             centroid = grid_feature_geom.Centroid()
             long_coord = centroid.GetX()
@@ -1239,8 +1245,6 @@ def main():
                     win_xsize=1, win_ysize=1)[0][0]
             grid_feature.SetField(field_name, float(pixel_value))
             target_summary_grid_layer.SetFeature(grid_feature)
-        #TODO the break is for testing
-        break
 
     # prod_poll_dep_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
     # prod_poll_dep_unrealized_en|va|fo_1d_cur|ssp1|ssp3|ssp5

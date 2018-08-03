@@ -1061,8 +1061,12 @@ def main():
     geopackage_driver = gdal.GetDriverByName('GPKG')
     target_summary_shapefile_path = os.path.join(
         OUTPUT_DIR, 'ipbes_pollination_summary.gpkg')
-    geopackage_driver.CreateCopy(
+    target_summary_grid_vector = geopackage_driver.CreateCopy(
         target_summary_shapefile_path, grid_shapefile_vector)
+    target_summary_grid_layer = target_summary_grid_vector.GetLayer()
+    for feature in target_summary_grid_layer:
+        feature_geom = feature.GetGeomRef()
+        LOGGER.debug('%s', feature_geom.GetEnvelope())
 
     task_graph.close()
     task_graph.join()

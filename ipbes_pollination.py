@@ -65,6 +65,7 @@ DELAYED_START = N_WORKERS >= 0
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 BLOB_ROOT = f'''ipbes_pollination_result'''
 
+country_to_region = {'Africa': 'Algeria', 'Africa': 'Angola', 'Africa': 'Benin', 'Africa': 'Botswana', 'Africa': 'Burkina Faso', 'Africa': 'Burundi', 'Africa': 'Cameroon', 'Africa': 'Cape Verde', 'Africa': 'Central African Republic', 'Africa': 'Chad', 'Africa': 'Congo', 'Africa': 'Cote d\'Ivoire', 'Africa': 'Democratic Republic of the Congo', 'Africa': 'Djibouti', 'Africa': 'Egypt', 'Africa': 'Equatorial Guinea', 'Africa': 'Eritrea', 'Africa': 'Ethiopia', 'Africa': 'Gabon', 'Africa': 'Gambia', 'Africa': 'Ghana', 'Africa': 'Guinea', 'Africa': 'Guinea-Bissau', 'Africa': 'Kenya', 'Africa': 'Lesotho', 'Africa': 'Liberia', 'Africa': 'Libyan Arab Jamahiriya', 'Africa': 'Madagascar', 'Africa': 'Malawi', 'Africa': 'Mali', 'Africa': 'Mauritania', 'Africa': 'Mauritius', 'Africa': 'Mayotte', 'Africa': 'Morocco', 'Africa': 'Mozambique', 'Africa': 'Namibia', 'Africa': 'Niger', 'Africa': 'Nigeria', 'Africa': 'Reunion', 'Africa': 'Rwanda', 'Africa': 'Sao Tome and Principe', 'Africa': 'Senegal', 'Africa': 'Sierra Leone', 'Africa': 'Somalia', 'Africa': 'South Africa', 'Africa': 'Sudan', 'Africa': 'Tunisia', 'Africa': 'Uganda', 'Africa': 'United Republic of Tanzania', 'Africa': 'Western Sahara', 'Africa': 'Zambia', 'Africa': 'Zimbabwe', 'Eurasia': 'Åland Islands', 'Eurasia': 'Albania', 'Eurasia': 'Andorra', 'Eurasia': 'Armenia', 'Eurasia': 'Austria', 'Eurasia': 'Azerbaijan', 'Eurasia': 'Bahrain', 'Eurasia': 'Belarus', 'Eurasia': 'Belgium', 'Eurasia': 'Bosnia and Herzegovina', 'Eurasia': 'Bulgaria', 'Eurasia': 'Croatia', 'Eurasia': 'Cyprus', 'Eurasia': 'Czech Republic', 'Eurasia': 'Denmark', 'Eurasia': 'Estonia', 'Eurasia': 'Finland', 'Eurasia': 'France', 'Eurasia': 'Georgia', 'Eurasia': 'Germany', 'Eurasia': 'Gibraltar', 'Eurasia': 'Greece', 'Eurasia': 'Greenland', 'Eurasia': 'Guernsey', 'Eurasia': 'Holy See (Vatican City)', 'Eurasia': 'Hungary', 'Eurasia': 'Iceland', 'Eurasia': 'Iraq', 'Eurasia': 'Ireland', 'Eurasia': 'Isle of Man', 'Eurasia': 'Israel', 'Eurasia': 'Italy', 'Eurasia': 'Jordan', 'Eurasia': 'Kuwait', 'Eurasia': 'Latvia', 'Eurasia': 'Lebanon', 'Eurasia': 'Lithuania', 'Eurasia': 'Malta', 'Eurasia': 'Montenegro', 'Eurasia': 'Netherlands', 'Eurasia': 'Norway', 'Eurasia': 'Oman', 'Eurasia': 'Poland', 'Eurasia': 'Portugal', 'Eurasia': 'Qatar', 'Eurasia': 'Republic of Moldova', 'Eurasia': 'Romania', 'Eurasia': 'Russia', 'Eurasia': 'Saudi Arabia', 'Eurasia': 'Serbia', 'Eurasia': 'Slovakia', 'Eurasia': 'Spain', 'Eurasia': 'Svalbard', 'Eurasia': 'Sweden', 'Eurasia': 'Syrian Arab Republic', 'Eurasia': 'Turkey', 'Eurasia': 'Ukraine', 'Eurasia': 'United Arab Emirates', 'Eurasia': 'United Kingdom', 'Eurasia': 'Yemen', 'North America': 'Anguilla', 'North America': 'Antigua and Barbuda', 'North America': 'Aruba', 'North America': 'Bahamas', 'North America': 'Barbados', 'North America': 'Belize', 'North America': 'Bermuda', 'North America': 'British Virgin Islands', 'North America': 'Canada', 'North America': 'Cayman Islands', 'North America': 'Costa Rica', 'North America': 'Cuba', 'North America': 'Dominican Republic', 'North America': 'El Salvador', 'North America': 'Grenada', 'North America': 'Guadeloupe', 'North America': 'Guatemala', 'North America': 'Haiti', 'North America': 'Honduras', 'North America': 'Jamaica', 'North America': 'Martinique', 'North America': 'Mexico', 'North America': 'Montserrat', 'North America': 'Netherlands Antilles', 'North America': 'Nicaragua', 'North America': 'Panama', 'North America': 'Puerto Rico', 'North America': 'Saint Lucia', 'North America': 'Saint Pierre and Miquelon', 'North America': 'Trinidad and Tobago', 'North America': 'Turks and Caicos Islands', 'North America': 'United States', 'North America': 'United States Virgin Islands', 'North Asia': 'China', 'North Asia': 'Hong Kong', 'North Asia': 'Japan', 'North Asia': 'Kazakhstan', 'North Asia': '"Korea': ' Democratic People\'s Republic of"', 'North Asia': '"Korea, Republic of"', 'North Asia': 'Kyrgyzstan', 'North Asia': 'Mongolia', 'North Asia': 'Taiwan', 'North Asia': 'Tajikistan', 'North Asia': 'Turkmenistan', 'North Asia': 'Uzbekistan', 'Oceania': 'American Samoa', 'Oceania': 'Australia', 'Oceania': 'Christmas Island', 'Oceania': 'Cocos (Keeling) Islands', 'Oceania': 'Comoros', 'Oceania': 'Cook Islands', 'Oceania': 'Dominica', 'Oceania': 'Faroe Islands', 'Oceania': 'Fiji', 'Oceania': 'French Polynesia', 'Oceania': 'Guam', 'Oceania': 'Kiribati', 'Oceania': 'Marshall Islands', 'Oceania': '"Micronesia': ' Federated States of"', 'Oceania': 'Nauru', 'Oceania': 'New Caledonia', 'Oceania': 'New Zealand', 'Oceania': 'Niue', 'Oceania': 'Norfolk Island', 'Oceania': 'Northern Mariana Islands', 'Oceania': 'Palau', 'Oceania': 'Papua New Guinea', 'Oceania': 'Pitcairn Islands', 'Oceania': 'Saint Helena', 'Oceania': 'Samoa', 'Oceania': 'Seychelles', 'Oceania': 'Solomon Islands', 'Oceania': 'Timor-Leste', 'Oceania': 'Tokelau', 'Oceania': 'Tonga', 'Oceania': 'Tuvalu', 'Oceania': 'United States Minor Outlying Islands', 'Oceania': 'Vanuatu', 'Oceania': 'Wallis and Futuna Islands', 'South America': 'Argentina', 'South America': 'Bolivia', 'South America': 'Brazil', 'South America': 'Chile', 'South America': 'Colombia', 'South America': 'Ecuador', 'South America': 'Falkland Islands (Malvinas)', 'South America': 'French Guiana', 'South America': 'Guyana', 'South America': 'Paraguay', 'South America': 'Peru', 'South America': 'Suriname', 'South America': 'Uruguay', 'South America': 'Venezuela', 'South Asia': 'Afghanistan', 'South Asia': 'Bangladesh', 'South Asia': 'Bhutan', 'South Asia': 'Brunei Darussalam', 'South Asia': 'Burma', 'South Asia': 'Cambodia', 'South Asia': 'India', 'South Asia': 'Indonesia', 'South Asia': 'Iran (Islamic Republic of)', 'South Asia': 'Lao People\'s Democratic Republic', 'South Asia': 'Malaysia', 'South Asia': 'Maldives', 'South Asia': 'Nepal', 'South Asia': 'Pakistan', 'South Asia': 'Philippines', 'South Asia': 'Sri Lanka', 'South Asia': 'Thailand', 'South Asia': 'Viet Nam'}
 
 def main():
     """Entry point."""
@@ -130,6 +131,31 @@ def main():
         target_path_list=[zip_touch_file_path],
         dependent_task_list=[degree_basedata_fetch_task],
         task_name=f'unzip degree_basedata_zip')
+
+    tm_world_borders_basedata_url = (
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/'
+        'TM_WORLD_BORDERS_SIMPL-0.3_md5_15057f7b17752048f9bd2e2e607fe99c.zip')
+    tm_world_borders_zipfile_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(tm_world_borders_basedata_url))
+    tm_world_borders_basedata_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            tm_world_borders_basedata_url, GOOGLE_BUCKET_KEY_PATH,
+            tm_world_borders_zipfile_path),
+        target_path_list=[tm_world_borders_zipfile_path],
+        task_name=f'fetch {os.path.basename(tm_world_borders_zipfile_path)}')
+    zip_touch_file_path = os.path.join(
+        os.path.dirname(tm_world_borders_zipfile_path),
+        'tm_world_borders_basedata_zip.txt')
+    unzip_yield_task = task_graph.add_task(
+        func=unzip_file,
+        args=(
+            tm_world_borders_zipfile_path, os.path.dirname(
+                tm_world_borders_zipfile_path),
+            zip_touch_file_path),
+        target_path_list=[zip_touch_file_path],
+        dependent_task_list=[tm_world_borders_basedata_fetch_task],
+        task_name=f'unzip tm_world_borders_basedata_zip')
 
     landcover_data = {
         'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
@@ -1100,9 +1126,22 @@ def main():
         target_summary_shapefile_path, grid_shapefile_vector)
     target_summary_grid_layer = target_summary_grid_vector.GetLayer()
 
+    tm_world_borders_path = os.path.join(
+        ECOSHARD_DIR, 'TM_WORLD_BORDERS_SIMPL-0.3.shp')
+    tm_world_borders_vector = gdal.OpenEx(
+        tm_world_borders_path, gdal.OF_VECTOR)
+    tm_world_borders_layer = tm_world_borders_vector.GetLayer()
+    # I am SOOOO tired tonight I can't hold an r-tree in my head to build
+    # another one of these, i can fix it later in the morning.
+    tm_feature_list = []
+    for feature in tm_world_borders_layer:
+        tm_feature_list.append(feature)
+
+    target_summary_grid_layer.CreateField(
+        ogr.FieldDefn('country', ogr.OFTString))
     for field_name in summary_raster_path_map:
-        summary_field = ogr.FieldDefn(field_name, ogr.OFTReal)
-        target_summary_grid_layer.CreateField(summary_field)
+        target_summary_grid_layer.CreateField(
+            ogr.FieldDefn(field_name, ogr.OFTReal))
 
     for field_name, raster_path in summary_raster_path_map.items():
         raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
@@ -1112,9 +1151,21 @@ def main():
 
         for feature_index in range(
                 target_summary_grid_layer.GetFeatureCount()):
-            feature = target_summary_grid_layer.GetFeature(feature_index)
-            feature_geom = feature.GetGeometryRef()
-            centroid = feature_geom.Centroid()
+            grid_feature = target_summary_grid_layer.GetFeature(feature_index)
+            grid_feature_geom = grid_feature.GetGeometryRef()
+
+            # this is a lazy loop because i am tired. needs spatial indexing
+            # to not take a very long time
+            for country_feature in tm_feature_list:
+                if country_feature.GetGeometryRef().Intersects(
+                        grid_feature_geom):
+                    country_name = country_feature.GetField('name')
+                    grid_feature.SetField('country', country_name)
+                    grid_feature.SetField(
+                        'region', country_to_region[country_name])
+                    break
+
+            centroid = grid_feature_geom.Centroid()
             long_coord = centroid.GetX()
             lat_coord = centroid.GetY()
 
@@ -1129,6 +1180,8 @@ def main():
                     win_xsize=1, win_ysize=1)[0][0]
             feature.SetField(field_name, float(pixel_value))
             target_summary_grid_layer.SetFeature(feature)
+        #TODO the break is for testing
+        break
 
     # prod_poll_dep_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
     # prod_poll_dep_unrealized_en|va|fo_1d_cur|ssp1|ssp3|ssp5

@@ -1065,7 +1065,7 @@ def main():
         target_summary_shapefile_path, grid_shapefile_vector)
     target_summary_grid_layer = target_summary_grid_vector.GetLayer()
     for feature in target_summary_grid_layer:
-        feature_geom = feature.GetGeomRef()
+        feature_geom = feature.GetGeometryRef()
         LOGGER.debug('%s', feature_geom.GetEnvelope())
 
     task_graph.close()

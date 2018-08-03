@@ -1114,6 +1114,7 @@ def main():
             task_name=f'''poll cont nut avg 1d {
                 os.path.basename(poll_cont_nut_req_avg_1d_path)}''')
 
+    task_graph.close()
     task_graph.join()
 
     countries_myregions_df = pandas.read_csv(
@@ -1196,9 +1197,6 @@ def main():
     # poll_cont_prod_avg_1d_cur|ssp1|ssp3|ssp5
     # poll_cont_nut_req_avg_1d_cur|ssp1|ssp3|ssp5cur|ssp1|ssp3|ssp5gpwpop
 
-
-    task_graph.close()
-    task_graph.join()
     # END MAIN
 
 

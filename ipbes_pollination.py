@@ -1116,9 +1116,13 @@ def main():
 
     task_graph.join()
 
-    countries_myregions_df = pandas.read_csv(
-        'countries_myregions.csv', usecols=['country', 'myregions'])
-    country_to_region_map = countries_myregions_df.to_dict(orient='index')
+     countries_myregions_df = pandas.read_csv(
+        'countries_myregions.csv', usecols=['country', 'myregions'],
+        sep=None, engine='python')
+    for row in countries_myregions_df.iterrows():
+        print(row[1][0])
+    country_to_region_dict = {
+        row[1][0]: row[1][1] for row in countries_myregions_df.iterrows()}
 
     grid_shapefile_path = os.path.join(ECOSHARD_DIR, 'grid_1_degree.shp')
     grid_shapefile_vector = gdal.OpenEx(grid_shapefile_path, gdal.OF_VECTOR)
@@ -1165,8 +1169,7 @@ def main():
                     country_name = country_feature.GetField('name')
                     grid_feature.SetField('country', country_name)
                     grid_feature.SetField(
-                        'region', country_to_region_map[
-                            country_name]['myregions'])
+                        'region', country_to_region_dict[country_name])
                     break
 
             centroid = grid_feature_geom.Centroid()

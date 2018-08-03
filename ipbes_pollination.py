@@ -1119,8 +1119,6 @@ def main():
     countries_myregions_df = pandas.read_csv(
         'countries_myregions.csv', usecols=['country', 'myregions'],
         sep=None, engine='python')
-    for row in countries_myregions_df.iterrows():
-        print(row[1][0])
     country_to_region_dict = {
         row[1][0]: row[1][1] for row in countries_myregions_df.iterrows()}
 

@@ -105,6 +105,29 @@ def main():
         target_path_list=[crop_nutrient_table_path],
         task_name=f'fetch {os.path.basename(crop_nutrient_table_path)}')
 
+    degree_basedata_url = (
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/'
+        'degree_basedata_md5_73a03fa0f5fb622e8d0f07c616576677.zip')
+    degree_zipfile_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(degree_basedata_url))
+    degree_basedata_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            degree_basedata_url, GOOGLE_BUCKET_KEY_PATH,
+            degree_zipfile_path),
+        target_path_list=[degree_zipfile_path],
+        task_name=f'fetch {os.path.basename(degree_zipfile_path)}')
+    zip_touch_file_path = os.path.join(
+        os.path.dirname(degree_zipfile_path), 'degree_basedata_zip.txt')
+    unzip_yield_task = task_graph.add_task(
+        func=unzip_file,
+        args=(
+            degree_zipfile_path, os.path.dirname(degree_zipfile_path),
+            zip_touch_file_path),
+        target_path_list=[zip_touch_file_path],
+        dependent_task_list=[yield_zip_fetch_task],
+        task_name=f'unzip degree_basedata_zip')
+
     landcover_data = {
         'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
             'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
@@ -1030,6 +1053,8 @@ def main():
                 for nut_id in ('en', 'fo', 'va')],
             task_name=f'''poll cont nut avg 1d {
                 os.path.basename(poll_cont_nut_req_avg_1d_path)}''')
+
+    task_graph.join()
 
     task_graph.close()
     task_graph.join()

@@ -1215,7 +1215,7 @@ def main():
                         grid_feature.SetField('region', 'UNKNOWN')
                     break
 
-            for hunger_feature in tm_feature_list:
+            for hunger_feature in hunger_feature_list:
                 if hunger_feature.GetGeometryRef().Intersects(
                         grid_feature_geom):
                     grid_feature.SetField(

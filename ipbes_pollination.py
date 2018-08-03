@@ -122,7 +122,7 @@ def main():
         task_name=f'fetch {os.path.basename(degree_zipfile_path)}')
     zip_touch_file_path = os.path.join(
         os.path.dirname(degree_zipfile_path), 'degree_basedata_zip.txt')
-    unzip_yield_task = task_graph.add_task(
+    __ = task_graph.add_task(
         func=unzip_file,
         args=(
             degree_zipfile_path, os.path.dirname(degree_zipfile_path),
@@ -146,7 +146,7 @@ def main():
     zip_touch_file_path = os.path.join(
         os.path.dirname(tm_world_borders_zipfile_path),
         'tm_world_borders_basedata_zip.txt')
-    unzip_yield_task = task_graph.add_task(
+    __ = task_graph.add_task(
         func=unzip_file,
         args=(
             tm_world_borders_zipfile_path, os.path.dirname(
@@ -155,6 +155,31 @@ def main():
         target_path_list=[zip_touch_file_path],
         dependent_task_list=[tm_world_borders_basedata_fetch_task],
         task_name=f'unzip tm_world_borders_basedata_zip')
+
+    hunger_basedata_url = (
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/'
+        'hunger-shapefile_md5_9f2b0e3d07d2002cd97db22e2a9b9069.zip')
+    hunger_zipfile_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(hunger_basedata_url))
+    hunger_basedata_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            hunger_basedata_url, GOOGLE_BUCKET_KEY_PATH,
+            hunger_zipfile_path),
+        target_path_list=[hunger_zipfile_path],
+        task_name=f'fetch {os.path.basename(hunger_zipfile_path)}')
+    zip_touch_file_path = os.path.join(
+        os.path.dirname(hunger_zipfile_path),
+        'hunger_basedata_zip.txt')
+    __ = task_graph.add_task(
+        func=unzip_file,
+        args=(
+            hunger_zipfile_path, os.path.dirname(
+                hunger_zipfile_path),
+            zip_touch_file_path),
+        target_path_list=[zip_touch_file_path],
+        dependent_task_list=[hunger_basedata_fetch_task],
+        task_name=f'unzip hunger_basedata_zip')
 
     landcover_data = {
         'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
@@ -1144,10 +1169,23 @@ def main():
     for feature in tm_world_borders_layer:
         tm_feature_list.append(feature)
 
-    target_summary_grid_layer.CreateField(
-        ogr.FieldDefn('country', ogr.OFTString))
-    target_summary_grid_layer.CreateField(
-        ogr.FieldDefn('region', ogr.OFTString))
+    hunger_path = os.path.join(
+        ECOSHARD_DIR, 'hunger.shp')
+    hunger_vector = gdal.OpenEx(
+        hunger_path, gdal.OF_VECTOR)
+    hunger_layer = hunger_vector.GetLayer()
+    # I am SOOOO tired tonight I can't hold an r-tree in my head to build
+    # another one of these, i can fix it later in the morning.
+    hunger_feature_list = []
+    for feature in hunger_layer:
+        hunger_feature_list.append(feature)
+
+    for field_name in ['country', 'region']:
+        target_summary_grid_layer.CreateField(
+            ogr.FieldDefn(field_name, ogr.OFTString))
+    for field_name in ['meanPCTu5', 'meanUW']:
+        target_summary_grid_layer.CreateField(
+            ogr.FieldDefn(field_name, ogr.OFTReal))
     for field_name in summary_raster_path_map:
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
@@ -1170,8 +1208,21 @@ def main():
                         grid_feature_geom):
                     country_name = country_feature.GetField('name')
                     grid_feature.SetField('country', country_name)
+                    try:
+                        grid_feature.SetField(
+                            'region', country_to_region_dict[country_name])
+                    except KeyError:
+                        grid_feature.SetField('region', 'UNKNOWN')
+                    break
+
+            for hunger_feature in tm_feature_list:
+                if hunger_feature.GetGeometryRef().Intersects(
+                        grid_feature_geom):
+                    hunger_name =
                     grid_feature.SetField(
-                        'region', country_to_region_dict[country_name])
+                        'meanPCTu5', hunger_feature.GetField('PCTu5'))
+                    grid_feature.SetField(
+                        'meanUW', hunger_feature.GetField('UW'))
                     break
 
             centroid = grid_feature_geom.Centroid()

@@ -17,6 +17,7 @@ import multiprocessing
 import tempfile
 
 from osgeo import gdal
+from osgeo import ogr
 import google.cloud.client
 import google.cloud.storage
 from osgeo import osr

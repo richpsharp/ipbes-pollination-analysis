@@ -1237,8 +1237,8 @@ def main():
             pixel_value = band.ReadAsArray(
                     xoff=x_coord, yoff=y_coord,
                     win_xsize=1, win_ysize=1)[0][0]
-            feature.SetField(field_name, float(pixel_value))
-            target_summary_grid_layer.SetFeature(feature)
+            grid_feature.SetField(field_name, float(pixel_value))
+            target_summary_grid_layer.SetFeature(grid_feature)
         #TODO the break is for testing
         break
 

@@ -1104,11 +1104,30 @@ def main():
         summary_field = ogr.FieldDefn(field_name, ogr.OFTReal)
         target_summary_grid_layer.CreateField(summary_field)
 
-    """
-    for feature in target_summary_grid_layer:
-        feature_geom = feature.GetGeometryRef()
-        LOGGER.debug('%s', feature_geom.GetEnvelope())
-    """
+    for field_name, raster_path in summary_raster_path_map.items():
+        raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
+        band = raster.GetRasterBand(1)
+        gt = raster.GetGeoTransform()
+        LOGGER.debug("summarizing raster %s", field_name)
+
+        for feature_index in target_summary_grid_layer.GetFeatureCount():
+            feature = target_summary_grid_layer.GetFeature(feature_index)
+            feature_geom = feature.GetGeometryRef()
+            centroid = feature_geom.Centroid()
+            long_coord = centroid.GetX()
+            lat_coord = centroid.GetY()
+
+            x_coord = int((long_coord - gt[0]) / gt[1])
+            if not 0 <= x_coord < band.XSize:
+                continue
+            y_coord = int((lat_coord - gt[3]) / gt[5])
+            if not 0 <= y_coord < band.YSize:
+                continue
+            pixel_value = band.ReadAsArray(
+                    xoff=x_coord, yoff=y_coord,
+                    win_xsize=1, win_ysize=1)[0][0]
+            feature.SetField(field_name, float(pixel_value))
+            target_summary_grid_layer.SetFeature(feature)
 
     # prod_poll_dep_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
     # prod_poll_dep_unrealized_en|va|fo_1d_cur|ssp1|ssp3|ssp5

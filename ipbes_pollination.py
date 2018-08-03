@@ -1110,7 +1110,8 @@ def main():
         gt = raster.GetGeoTransform()
         LOGGER.debug("summarizing raster %s", field_name)
 
-        for feature_index in target_summary_grid_layer.GetFeatureCount():
+        for feature_index in range(
+                target_summary_grid_layer.GetFeatureCount()):
             feature = target_summary_grid_layer.GetFeature(feature_index)
             feature_geom = feature.GetGeometryRef()
             centroid = feature_geom.Centroid()

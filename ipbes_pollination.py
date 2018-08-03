@@ -1116,7 +1116,7 @@ def main():
 
     task_graph.join()
 
-     countries_myregions_df = pandas.read_csv(
+    countries_myregions_df = pandas.read_csv(
         'countries_myregions.csv', usecols=['country', 'myregions'],
         sep=None, engine='python')
     for row in countries_myregions_df.iterrows():

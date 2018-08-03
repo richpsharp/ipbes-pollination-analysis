@@ -1146,6 +1146,8 @@ def main():
 
     target_summary_grid_layer.CreateField(
         ogr.FieldDefn('country', ogr.OFTString))
+    target_summary_grid_layer.CreateField(
+        ogr.FieldDefn('region', ogr.OFTString))
     for field_name in summary_raster_path_map:
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))

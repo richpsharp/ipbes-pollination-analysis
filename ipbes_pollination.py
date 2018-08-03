@@ -125,7 +125,7 @@ def main():
             degree_zipfile_path, os.path.dirname(degree_zipfile_path),
             zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
-        dependent_task_list=[yield_zip_fetch_task],
+        dependent_task_list=[degree_basedata_fetch_task],
         task_name=f'unzip degree_basedata_zip')
 
     landcover_data = {

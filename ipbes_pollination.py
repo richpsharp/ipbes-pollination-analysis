@@ -71,6 +71,8 @@ def main():
         CHURN_DIR, N_WORKERS, delayed_start=DELAYED_START,
         reporting_interval=5.0)
 
+    summary_raster_path_map = {}
+
     # 1.2.    POLLINATION-DEPENDENT NUTRIENT PRODUCTION
     # Pollination-dependence of crops, crop yields, and crop micronutrient
     # content were combined in an analysis to calculate pollination-dependent
@@ -531,6 +533,10 @@ def main():
             upload_blob(
                 task_graph, prod_poll_dep_realized_nut_scenario_1d_path,
                 prod_poll_dep_realized_1d_task)
+            summary_raster_path_map[
+                f'''prod_poll_dep_realized_{
+                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                        prod_poll_dep_realized_nut_scenario_1d_path)
 
             # nat_cont_poll_en|va|fo|avg_10s|1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to pollination,"" or the realized
@@ -576,6 +582,10 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, nat_cont_poll_nut_path,
                 nat_cont_poll_nut_task)
+            summary_raster_path_map[
+                f'''nat_cont_poll_{
+                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                        nat_cont_poll_nut_path)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
@@ -603,9 +613,15 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_unrealized_nut_scenario_path,
                 prod_poll_dep_unrealized_nut_scenario_task)
-            schedule_aggregate_to_degree(
-                task_graph, prod_poll_dep_unrealized_nut_scenario_path,
-                numpy.sum, prod_poll_dep_unrealized_nut_scenario_task)
+            (prod_poll_dep_unrealized_nut_scenario_1d_task,
+             prod_poll_dep_unrealized_nut_scenario_1d_path) = (
+                schedule_aggregate_to_degree(
+                    task_graph, prod_poll_dep_unrealized_nut_scenario_path,
+                    numpy.sum, prod_poll_dep_unrealized_nut_scenario_task))
+            summary_raster_path_map[
+                f'''prod_poll_dep_unrealized_{
+                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                        prod_poll_dep_unrealized_nut_scenario_1d_path)
 
             # calculate prod_total_realized as
             #   prod_total_potential - prod_poll_dep_unrealized
@@ -638,6 +654,10 @@ def main():
                 schedule_aggregate_to_degree(
                     task_graph, prod_total_realized_nut_scenario_path,
                     numpy.sum, prod_total_realized_nut_scenario_task))
+            summary_raster_path_map[
+                f'''prod_total_realized_{
+                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                        prod_total_realized_nut_1d_scenario_path)
 
             # poll_cont_prod_en|va|fo|10s|cur|ssp1|ssp3|ssp5: pollination's
             # contribution to production, or the realized
@@ -684,6 +704,10 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, poll_cont_prod_nut_1d_path,
                 poll_cont_prod_nut_task)
+            summary_raster_path_map[
+                f'''poll_cont_prod_{
+                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                        poll_cont_prod_nut_1d_path)
 
         poll_cont_prod_avg_path = os.path.join(
             OUTPUT_DIR, f'''poll_cont_prod_avg_10s_{
@@ -964,6 +988,10 @@ def main():
         tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
             task_graph, tot_nut_requirements_path,
             numpy.sum, total_requirements_task)
+        summary_raster_path_map[
+            f'''nut_req_{
+                nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                    tot_nut_deg_path)
 
         # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
         # contribution to nutrition," the contribution of wild pollination to
@@ -985,6 +1013,9 @@ def main():
                 os.path.basename(poll_cont_nut_req_path)}''')
         prod_poll_dep_1d_task_path_map[('cur', nut_id)] = (
             poll_cont_nut_task, poll_cont_nut_req_path)
+        summary_raster_path_map[
+            f'''poll_cont_nut_req_{nutrient_id}_1d_cur'''] = (
+                poll_cont_nut_req_path)
 
         # calculate ssp needs
         for ssp_id in (1, 3, 5):
@@ -1011,6 +1042,9 @@ def main():
             tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
+            summary_raster_path_map[
+                f'''poll_cont_nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = (
+                    poll_cont_nut_req_path)
 
             # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to nutrition," the contribution of wild pollination
@@ -1064,9 +1098,25 @@ def main():
     target_summary_grid_vector = geopackage_driver.CreateCopy(
         target_summary_shapefile_path, grid_shapefile_vector)
     target_summary_grid_layer = target_summary_grid_vector.GetLayer()
+
+    for field_name in summary_raster_path_map:
+        summary_field = ogr.FieldDefn(field_name, ogr.OFTReal)
+        target_summary_grid_layer.CreateField(summary_field)
+
+    """
     for feature in target_summary_grid_layer:
         feature_geom = feature.GetGeometryRef()
         LOGGER.debug('%s', feature_geom.GetEnvelope())
+    """
+
+    # prod_poll_dep_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
+    # prod_poll_dep_unrealized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
+    # prod_total_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
+    # nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5
+    # nat_cont_poll_avg_1d_cur|ssp1|ssp3|ssp5
+    # poll_cont_prod_avg_1d_cur|ssp1|ssp3|ssp5
+    # poll_cont_nut_req_avg_1d_cur|ssp1|ssp3|ssp5cur|ssp1|ssp3|ssp5gpwpop
+
 
     task_graph.close()
     task_graph.join()

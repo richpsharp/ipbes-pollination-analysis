@@ -1219,7 +1219,7 @@ def main():
                 if hunger_feature.GetGeometryRef().Intersects(
                         grid_feature_geom):
                     grid_feature.SetField(
-                        'meanPCTu5', hunger_feature.GetField('PCTu5'))
+                        'meanPCTu5', hunger_feature.GetField('PCTU5'))
                     grid_feature.SetField(
                         'meanUW', hunger_feature.GetField('UW'))
                     break

@@ -1056,6 +1056,14 @@ def main():
 
     task_graph.join()
 
+    grid_shapefile_path = os.path.join(ECOSHARD_DIR, 'grid_1_degree.shp')
+    grid_shapefile_vector = gdal.OpenEx(grid_shapefile_path, gdal.OF_VECTOR)
+    geopackage_driver = gdal.GetDriverByName('GeoPackage')
+    target_summary_shapefile_path = os.path.join(
+        OUTPUT_DIR, 'ipbes_pollination_summary.gpkg')
+    geopackage_driver.CreateCopy(
+        target_summary_shapefile_path, grid_shapefile_vector)
+
     task_graph.close()
     task_graph.join()
     # END MAIN

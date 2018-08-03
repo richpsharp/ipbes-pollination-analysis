@@ -1218,7 +1218,6 @@ def main():
             for hunger_feature in tm_feature_list:
                 if hunger_feature.GetGeometryRef().Intersects(
                         grid_feature_geom):
-                    hunger_name =
                     grid_feature.SetField(
                         'meanPCTu5', hunger_feature.GetField('PCTu5'))
                     grid_feature.SetField(

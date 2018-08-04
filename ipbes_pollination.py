@@ -2159,7 +2159,7 @@ def schedule_sum_and_aggregate(
             result[local_valid_mask] += array[local_valid_mask]
         return result
 
-    add_task = task_graph.add_task(
+    add_raster_task = task_graph.add_task(
         func=pygeoprocessing.raster_calculator,
         args=(
             path_list, add_op, target_10s_path,
@@ -2169,7 +2169,7 @@ def schedule_sum_and_aggregate(
         task_name=f'add rasters {os.path.basename(target_10s_path)}')
 
     return schedule_aggregate_to_degree(
-        task_graph, target_10s_path, aggregate_func, add_task)
+        task_graph, target_10s_path, aggregate_func, add_raster_task)
 
 
 def schedule_aggregate_to_degree(

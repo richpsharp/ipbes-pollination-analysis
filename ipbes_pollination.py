@@ -901,6 +901,21 @@ def main():
         schedule_upload_blob_and_overviews(
             task_graph, gpw_count_path, gpw_count_task)
 
+    # TODO: calculate "cur" GPW at degree scale here
+    gpw_1d_path_map = {}
+    total_cur_pop_10s_path = os.path.join(
+        OUTPUT_DIR, 'gpw_v4_e_atot_pop_10s_cur.tif')
+    (total_cur_pop_1d_task, total_cur_pop_1d_path) = (
+        schedule_sum_and_aggregate(
+            task_graph,
+            [gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][1],
+             gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][1]],
+            numpy.sum, [
+                gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][0],
+                gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][0]],
+            total_cur_pop_10s_path))
+    gpw_1d_path_map['cur'] = total_cur_pop_1d_path
+
     # calculate 15-65 population gpw count by subtracting total from
     # 0-14 and 65plus
     for gender_id in ['f', 'm']:
@@ -969,6 +984,8 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, base_path, warp_task)
 
+        gpw_path_list = []
+        gpw_task_list = []
         for gpw_id in [
                 'gpw_v4_e_a000_014ft_2010_count',
                 'gpw_v4_e_a000_014mt_2010_count',
@@ -992,8 +1009,20 @@ def main():
                 target_path_list=[ssp_pop_path],
                 task_name=f'ssp pop {os.path.basename(ssp_pop_path)}')
             ssp_task_pop_map[(ssp_id, gpw_id)] = (ssp_pop_task, ssp_pop_path)
+            gpw_path_list.append(ssp_pop_path)
+            gpw_task_list.append(ssp_pop_task)
             schedule_upload_blob_and_overviews(
                 task_graph, ssp_pop_path, ssp_pop_task)
+
+        total_ssp_pop_1d_path = os.path.join(
+            OUTPUT_DIR, f'gpw_v4_e_atot_pop_30s_ssp{ssp_id}.tif')
+        (total_ssp_pop_1d_task, total_ssp_pop_1d_path) = (
+            schedule_sum_and_aggregate(
+                task_graph, gpw_path_list, numpy.sum, gpw_task_list,
+                total_ssp_pop_1d_path))
+        gpw_1d_path_map[f'ssp{ssp_id}'] = total_ssp_pop_1d_path
+
+        # TODO: calculate degree sum of population for ssps here
 
     # 2)
     # calculate the total nutritional needs per pixel for cur ssp1..5 scenario
@@ -1189,6 +1218,9 @@ def main():
     for field_name in summary_raster_path_map:
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
+    for field_name in gpw_1d_path_map:
+        target_summary_grid_layer.CreateField(
+            ogr.FieldDefn(field_name, ogr.OFTReal))
 
     for feature_index in range(
             target_summary_grid_layer.GetFeatureCount()):
@@ -1220,7 +1252,9 @@ def main():
         target_summary_grid_layer.SetFeature(grid_feature)
 
     # this one does the rasters
-    for field_name, raster_path in summary_raster_path_map.items():
+    for field_name, raster_path in itertools.chain(
+                summary_raster_path_map.items(),
+                gpw_1d_path_map.items()):
         raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
         band = raster.GetRasterBand(1)
         gt = raster.GetGeoTransform()
@@ -2105,6 +2139,37 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
         [(raster_a_path, 1), (raster_b_path, 1), (nodata_a, 'raw'),
          (nodata_b, 'raw'), (_MULT_NODATA, 'raw')], _mult_raster_op,
         target_path, gdal.GDT_Float32, _MULT_NODATA)
+
+
+def schedule_sum_and_aggregate(
+        task_graph, base_raster_path_list, aggregate_func,
+        base_raster_task_list, target_10s_path):
+    """Sum all rasters in `base_raster_path` and aggregate to degree."""
+    path_list = [(path, 1) for path in base_raster_path_list]
+
+    target_nodata = -9999.
+
+    def add_op(*array_list):
+        result = numpy.zeros(array_list[0].shape, dtype=numpy.float32)
+        valid_mask = numpy.zeroes(result.shape, dtype=numpy.bool)
+        for array in array_list:
+            # nodata values will be < 0
+            local_valid_mask = array >= 0
+            valid_mask |= local_valid_mask
+            result[local_valid_mask] += array[local_valid_mask]
+        return result
+
+    add_task = task_graph.add_task(
+        func=pygeoprocessing.raster_calculator,
+        args=(
+            path_list, add_op, target_10s_path,
+            gdal.GDT_Float32, target_nodata),
+        target_path_list=[target_10s_path],
+        dependent_task_list=base_raster_task_list,
+        task_name=f'add rasters {os.path.basename(target_10s_path)}')
+
+    return schedule_aggregate_to_degree(
+        task_graph, target_10s_path, aggregate_func, add_task)
 
 
 def schedule_aggregate_to_degree(

@@ -2140,6 +2140,17 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
          (nodata_b, 'raw'), (_MULT_NODATA, 'raw')], _mult_raster_op,
         target_path, gdal.GDT_Float32, _MULT_NODATA)
 
+def add_op(target_nodata, *array_list):
+        result = numpy.zeros(array_list[0].shape, dtype=numpy.float32)
+        valid_mask = numpy.zeroes(result.shape, dtype=numpy.bool)
+        for array in array_list:
+            # nodata values will be < 0
+            local_valid_mask = array >= 0
+            valid_mask |= local_valid_mask
+            result[local_valid_mask] += array[local_valid_mask]
+        result[~valid_mask] = target_nodata
+        return result
+
 
 def schedule_sum_and_aggregate(
         task_graph, base_raster_path_list, aggregate_func,
@@ -2149,20 +2160,10 @@ def schedule_sum_and_aggregate(
 
     target_nodata = -9999.
 
-    def add_op(*array_list):
-        result = numpy.zeros(array_list[0].shape, dtype=numpy.float32)
-        valid_mask = numpy.zeroes(result.shape, dtype=numpy.bool)
-        for array in array_list:
-            # nodata values will be < 0
-            local_valid_mask = array >= 0
-            valid_mask |= local_valid_mask
-            result[local_valid_mask] += array[local_valid_mask]
-        return result
-
     add_raster_task = task_graph.add_task(
         func=pygeoprocessing.raster_calculator,
         args=(
-            path_list, add_op, target_10s_path,
+            [(target_nodata, 'raw')] + path_list, add_op, target_10s_path,
             gdal.GDT_Float32, target_nodata),
         target_path_list=[target_10s_path],
         dependent_task_list=base_raster_task_list,

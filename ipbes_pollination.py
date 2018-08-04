@@ -2142,7 +2142,7 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
 
 def add_op(target_nodata, *array_list):
         result = numpy.zeros(array_list[0].shape, dtype=numpy.float32)
-        valid_mask = numpy.zeroes(result.shape, dtype=numpy.bool)
+        valid_mask = numpy.zeros(result.shape, dtype=numpy.bool)
         for array in array_list:
             # nodata values will be < 0
             local_valid_mask = array >= 0

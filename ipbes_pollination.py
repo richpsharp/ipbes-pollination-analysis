@@ -914,6 +914,8 @@ def main():
                 gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][0],
                 gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][0]],
             total_cur_pop_10s_path))
+    schedule_upload_blob_and_overviews(
+        task_graph, total_cur_pop_1d_path, total_cur_pop_1d_task)
     gpw_1d_path_map['cur'] = total_cur_pop_1d_path
 
     # calculate 15-65 population gpw count by subtracting total from
@@ -1020,9 +1022,9 @@ def main():
             schedule_sum_and_aggregate(
                 task_graph, gpw_path_list, numpy.sum, gpw_task_list,
                 total_ssp_pop_1d_path))
+        schedule_upload_blob_and_overviews(
+            task_graph, total_ssp_pop_1d_path, total_ssp_pop_1d_task)
         gpw_1d_path_map[f'ssp{ssp_id}'] = total_ssp_pop_1d_path
-
-        # TODO: calculate degree sum of population for ssps here
 
     # 2)
     # calculate the total nutritional needs per pixel for cur ssp1..5 scenario
@@ -1280,6 +1282,17 @@ def main():
                     win_xsize=1, win_ysize=1)[0][0]
             grid_feature.SetField(field_name, float(pixel_value))
             target_summary_grid_layer.SetFeature(grid_feature)
+
+    blob_path = os.path.join(
+        BLOB_ROOT, os.path.basename(
+            target_summary_shapefile_path)).replace(os.sep, '/')
+    file_upload_touch_file = f'''{
+        os.path.join(
+            CHURN_DIR, 'blob_upload_complete',
+            blob_path.replace('/', '_'))}.complete'''
+    google_bucket_upload(
+        target_summary_shapefile_path, GOOGLE_BUCKET_ID,
+        blob_path, GOOGLE_BUCKET_KEY_PATH, file_upload_touch_file)
 
     # prod_poll_dep_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
     # prod_poll_dep_unrealized_en|va|fo_1d_cur|ssp1|ssp3|ssp5

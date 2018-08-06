@@ -2095,7 +2095,7 @@ def create_prod_nutrient_raster(
     pollination_yield_factor_list = []
     for _, row in crop_nutrient_df.iterrows():
         yield_raster_path = os.path.join(
-            yield_raster_dir, f"{row['filenm']}_yield_map_{HG_REV}.tif")
+            yield_raster_dir, f"{row['filenm']}_yield_map.tif")
         if os.path.exists(yield_raster_path):
             yield_raster_path_list.append(yield_raster_path)
             pollination_yield_factor_list.append(

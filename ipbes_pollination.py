@@ -474,7 +474,7 @@ def main():
         poll_cont_prod_map = {}
         poll_cont_1d_prod_map = {}
         for nutrient_id in ('en', 'va', 'fo'):
-            tot_prod_task, tot_prod_1d_path = (
+            tot_prod_task, tot_prod_path = (
                 prod_total_nut_10s_task_path_map[nutrient_id])
 
             prod_total_potential_path = os.path.join(
@@ -483,7 +483,7 @@ def main():
             prod_total_potential_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
-                    ag_task_path_tuple[1], tot_prod_1d_path,
+                    ag_task_path_tuple[1], tot_prod_path,
                     prod_total_potential_path),
                 target_path_list=[prod_total_potential_path],
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
@@ -2000,7 +2000,18 @@ def _make_logger_callback(message):
 
 def total_yield_op(
         yield_nodata, pollination_yield_factor_list, *crop_yield_array_list):
-    """Calculate total yield."""
+    """Calculate total yield.
+
+    Parameters:
+        yield_nodata (numeric): nodata value for the arrays in
+            ``crop_yield_array_list```.
+        pollination_yield_factor_list (list of float): list of non-refuse
+            proportion of yield that is pollination dependent.
+        crop_yield_array_list (list of numpy.ndarray): list of 2D arrays of
+            yield (tons/Ha) for crops that correlate in order with the
+            ``pollination_yield_factor_list``.
+
+    """
     result = numpy.empty(crop_yield_array_list[0].shape, dtype=numpy.float32)
     result[:] = 0.0
     all_valid = numpy.zeros(result.shape, dtype=numpy.bool)
@@ -2015,12 +2026,21 @@ def total_yield_op(
     return result
 
 
-def density_to_value_op(density_array, y_ha_array, density_nodata):
-    """Calculate production."""
+def density_to_value_op(density_array, area_array, density_nodata):
+    """Calculate production.
+
+    Parameters:
+        density_array (numpy.ndarray): array of densities / area in
+            ``area_array``.
+        area_array (numpy.ndarray): area of each cell that corresponds with
+            ``density_array``.
+        density_ndoata (numeric): nodata value of the ``density_array``.
+
+    """
     result = numpy.empty(density_array.shape, dtype=numpy.float32)
     result[:] = density_nodata
     valid_mask = density_array != density_nodata
-    result[valid_mask] = density_array[valid_mask] * y_ha_array[valid_mask]
+    result[valid_mask] = density_array[valid_mask] * area_array[valid_mask]
     return result
 
 
@@ -2048,7 +2068,7 @@ def create_prod_nutrient_raster(
         sample_target_fetch_task (Task): must be complete before
             `sample_target_raster_path` is available.
         target_10km_yield_path (str): path to target raster that will
-            contain total yield
+            contain total yield (tons/Ha)
         target_10s_yield_path (str): path to a resampled
             `target_10km_yield_path` at 10s resolution.
         target_10s_production_path (str): path to target raster that will

@@ -1269,7 +1269,14 @@ def main():
                 gpw_1d_path_map.items()):
         raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
         band = raster.GetRasterBand(1)
+        x_size = band.XSize
+        y_size = band.YSize
+        # assume the array fits in memory, it should since it's 1 degree
+        # resolution
+        raster_array = band.ReadAsArray()
         gt = raster.GetGeoTransform()
+        band = None
+        raster = None
         LOGGER.debug("summarizing raster %s", field_name)
 
         for feature_index in range(
@@ -1282,14 +1289,12 @@ def main():
             lat_coord = centroid.GetY()
 
             x_coord = int((long_coord - gt[0]) / gt[1])
-            if not 0 <= x_coord < band.XSize:
+            if not 0 <= x_coord < x_size:
                 continue
             y_coord = int((lat_coord - gt[3]) / gt[5])
-            if not 0 <= y_coord < band.YSize:
+            if not 0 <= y_coord < y_size:
                 continue
-            pixel_value = band.ReadAsArray(
-                    xoff=x_coord, yoff=y_coord,
-                    win_xsize=1, win_ysize=1)[0][0]
+            pixel_value = raster_array[y_coord, x_coord]
             grid_feature.SetField(field_name, float(pixel_value))
             target_summary_grid_layer.SetFeature(grid_feature)
 

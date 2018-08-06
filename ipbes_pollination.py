@@ -1638,7 +1638,15 @@ def calculate_future_pop(
 
 
 def calc_pop_count(gpw_dens_path, gpw_count_path):
-    """Calculate population count from density."""
+    """Calculate population count from density.
+
+    Parameters:
+        gpw_dens_path (string): path to density raster in units of
+            people / km^2.
+        gpw_count_path (string): path to target raster to generate number of
+            people / pixel.
+
+    """
     gpw_dens_info = pygeoprocessing.get_raster_info(gpw_dens_path)
     y_lat_array = numpy.linspace(
         gpw_dens_info['geotransform'][3],
@@ -1647,14 +1655,15 @@ def calc_pop_count(gpw_dens_path, gpw_count_path):
         gpw_dens_info['raster_size'][1],
         gpw_dens_info['raster_size'][1])
 
-    y_ha_array = area_of_pixel(
+    # `area_of_pixel` is in m^2, convert to km^2
+    y_km2_array = area_of_pixel(
         abs(gpw_dens_info['geotransform'][1]),
-        y_lat_array) / 10000.0
-    y_ha_column = y_ha_array.reshape((y_ha_array.size, 1))
+        y_lat_array) * 1e-6
+    y_km2_column = y_km2_array.reshape((y_km2_array.size, 1))
 
     nodata = gpw_dens_info['nodata'][0]
     pygeoprocessing.raster_calculator(
-        [(gpw_dens_path, 1), y_ha_column, (nodata, 'raw')],
+        [(gpw_dens_path, 1), y_km2_column, (nodata, 'raw')],
         density_to_value_op, gpw_count_path, gdal.GDT_Float32,
         nodata)
 

@@ -36,6 +36,9 @@ if HG_REV.endswith('+'):
         "Current repository has uncommitted changes. Commit them.")
 HG_SUFFIX = f'hg_{HG_REV}'
 
+HG_DATE = subprocess.check_output(
+    ['hg', 'log', '-l', '1', '--template', '{date}']).decode('utf-8').strip()
+
 # set a 1GB limit for the cache
 gdal.SetCacheMax(2**30)
 
@@ -70,7 +73,7 @@ N_WORKERS = max(1, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
-BLOB_ROOT = f'''ipbes_pollination_result_{HG_REV}'''
+BLOB_ROOT = f'''ipbes_pollination_result_{HG_DATE}_{HG_REV}'''
 
 
 def main():

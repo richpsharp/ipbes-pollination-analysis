@@ -12,3 +12,5 @@ taskgraph>=0.5.1
 psutil>=5.2.2
 reproduce>=0.0.5
 crcmod
+rtree>=0.8.3
+shapely>=1.6.4

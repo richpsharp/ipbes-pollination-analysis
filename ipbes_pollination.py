@@ -2127,8 +2127,10 @@ def create_prod_nutrient_raster(
         'cubicspline', target_bb=sample_target_raster_info['bounding_box'],
         n_threads=2)
 
+    # multiplying the ha_array by 1e4 because the of yield are in
+    # nutrient / 100g and yield is in Mg / ha.
     pygeoprocessing.raster_calculator(
-        [(target_10s_yield_path, 1), y_ha_column,
+        [(target_10s_yield_path, 1), y_ha_column * 1e4,
          (yield_nodata, 'raw')], density_to_value_op,
         target_10s_production_path, gdal.GDT_Float32, yield_nodata)
 

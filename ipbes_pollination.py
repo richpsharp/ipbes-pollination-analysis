@@ -4,6 +4,7 @@ Pollination analysis for IPBES.
     From "IPBES Methods: Pollination Contribution to Human Nutrition."
     https://www.dropbox.com/s/gc4b1miw2zypuke/IPBES%20Methods_Pollination_RS.docx?dl=0
 """
+import subprocess
 import shutil
 import base64
 import sys
@@ -28,6 +29,12 @@ import reproduce
 import taskgraph
 import pygeoprocessing
 import crcmod
+
+HG_REV = subprocess.check_output(['hg', 'id', '--id']).decode('utf-8').strip()
+if HG_REV.endswith('+'):
+    raise RuntimeError(
+        "Current repository has uncommitted changes. Commit them.")
+HG_SUFFIX = f'hg_{HG_REV}'
 
 # set a 1GB limit for the cache
 gdal.SetCacheMax(2**30)
@@ -63,7 +70,7 @@ N_WORKERS = max(1, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
-BLOB_ROOT = f'''ipbes_pollination_result'''
+BLOB_ROOT = f'''ipbes_pollination_result_{HG_REV}'''
 
 
 def main():
@@ -1352,18 +1359,20 @@ def upload_blob(task_graph, base_path, dependent_task):
     blob_path = (
         os.path.join(BLOB_ROOT, os.path.relpath(
             base_path, WORKING_DIR)).replace(os.sep, '/'))
+    blob_hash_path = f'%s_{HG_SUFFIX}%s' % (
+        os.path.splitext(blob_path))
     file_upload_touch_file = f'''{
         os.path.join(
             CHURN_DIR, 'blob_upload_complete',
-            blob_path.replace('/', '_'))}.complete'''
+            blob_hash_path.replace('/', '_'))}.complete'''
     __ = task_graph.add_task(
         func=google_bucket_upload,
         args=(
-            base_path, GOOGLE_BUCKET_ID, blob_path,
+            base_path, GOOGLE_BUCKET_ID, blob_hash_path,
             GOOGLE_BUCKET_KEY_PATH, file_upload_touch_file),
         target_path_list=[file_upload_touch_file],
         dependent_task_list=[dependent_task],
-        task_name=f'google bucket upload {blob_path}')
+        task_name=f'google bucket upload {blob_hash_path}')
 
 
 def calculate_total_requirements(
@@ -2086,7 +2095,7 @@ def create_prod_nutrient_raster(
     pollination_yield_factor_list = []
     for _, row in crop_nutrient_df.iterrows():
         yield_raster_path = os.path.join(
-            yield_raster_dir, f"{row['filenm']}_yield_map.tif")
+            yield_raster_dir, f"{row['filenm']}_yield_map_{HG_REV}.tif")
         if os.path.exists(yield_raster_path):
             yield_raster_path_list.append(yield_raster_path)
             pollination_yield_factor_list.append(

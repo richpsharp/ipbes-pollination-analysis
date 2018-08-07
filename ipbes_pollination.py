@@ -17,6 +17,8 @@ import itertools
 import multiprocessing
 import tempfile
 
+import rtree
+import shapely
 from osgeo import gdal
 from osgeo import ogr
 import google.cloud.client
@@ -1200,51 +1202,35 @@ def main():
 
     tm_world_borders_path = os.path.join(
         ECOSHARD_DIR, 'TM_WORLD_BORDERS-0.3.shp')
-    print(os.path.exists(tm_world_borders_path))
-    tm_world_borders_vector = gdal.OpenEx(
-        tm_world_borders_path, gdal.OF_VECTOR)
-    tm_world_borders_layer = tm_world_borders_vector.GetLayer()
-    # I am SOOOO tired tonight I can't hold an r-tree in my head to build
-    # another one of these, i can fix it later in the morning.
-    tm_feature_list = []
-    for feature in tm_world_borders_layer:
-        tm_feature_list.append(feature)
+    country_rtree, country_geom_list = build_spatial_index(
+        tm_world_borders_path)
+    hunger_path = os.path.join(ECOSHARD_DIR, 'hunger.shp')
+    hunger_rtree, hunger_geom_list = build_spatial_index(hunger_path)
 
-    hunger_path = os.path.join(
-        ECOSHARD_DIR, 'hunger.shp')
-    hunger_vector = gdal.OpenEx(
-        hunger_path, gdal.OF_VECTOR)
+    country_vector = gdal.OpenEx(tm_world_borders_path, gdal.OF_VECTOR)
+    country_layer = country_vector.GetLayer()
+
+    hunger_vector = gdal.OpenEx(hunger_path, gdal.OF_VECTOR)
     hunger_layer = hunger_vector.GetLayer()
-    # I am SOOOO tired tonight I can't hold an r-tree in my head to build
-    # another one of these, i can fix it later in the morning.
-    hunger_feature_list = []
-    for feature in hunger_layer:
-        hunger_feature_list.append(feature)
 
     for field_name in ['country', 'region']:
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTString))
-    for field_name in ['PCTU5', 'UW']:
-        target_summary_grid_layer.CreateField(
-            ogr.FieldDefn(field_name, ogr.OFTReal))
-    for field_name in summary_raster_path_map:
-        target_summary_grid_layer.CreateField(
-            ogr.FieldDefn(field_name, ogr.OFTReal))
-    for field_name in gpw_1d_path_map:
+    for field_name in itertools.chain(
+            ['PCTU5', 'UW'], summary_raster_path_map, gpw_1d_path_map):
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
 
     for feature_index in range(
             target_summary_grid_layer.GetFeatureCount()):
         grid_feature = target_summary_grid_layer.GetFeature(feature_index)
-        grid_feature_geom = grid_feature.GetGeometryRef()
+        grid_feature_geom = shapely.wkb.loads(
+            grid_feature.GetGeometryRef().ExportToWkb())
 
-        # this is a lazy loop because i am tired. needs spatial indexing
-        # to not take a very long time
-        for country_feature in tm_feature_list:
-            if country_feature.GetGeometryRef().Intersects(
-                    grid_feature_geom):
-                country_name = country_feature.GetField('name')
+        for country_index in country_rtree.intersection(grid_feature.bounds):
+            if country_geom_list[country_index].intersects(grid_feature_geom):
+                country_name = country_layer.GetFeature(
+                    country_index).GetField('name')
                 grid_feature.SetField('country', country_name)
                 try:
                     grid_feature.SetField(
@@ -1253,14 +1239,13 @@ def main():
                     grid_feature.SetField('region', 'UNKNOWN')
                 break
 
-        for hunger_feature in hunger_feature_list:
-            if hunger_feature.GetGeometryRef().Intersects(
-                    grid_feature_geom):
+        for hunger_index in hunger_rtree.intersection(grid_feature.bounds):
+            if hunger_geom_list[hunger_index].intersects(grid_feature_geom):
+                hunger_feature = hunger_layer.GetFeature(hunger_index)
                 grid_feature.SetField(
                     'PCTU5', hunger_feature.GetField('PCTU5'))
-                grid_feature.SetField(
-                    'UW', hunger_feature.GetField('UW'))
-                break
+                grid_feature.SetField('UW', hunger_feature.GetField('UW'))
+
         target_summary_grid_layer.SetFeature(grid_feature)
 
     # this one does the rasters
@@ -1318,6 +1303,23 @@ def main():
     # poll_cont_nut_req_avg_1d_cur|ssp1|ssp3|ssp5cur|ssp1|ssp3|ssp5gpwpop
 
     # END MAIN
+
+
+def build_spatial_index(vector_path):
+    """Build an rtree/geom list tuple from ``vector_path``."""
+    vector = gdal.OpenEx(vector_path)
+    layer = vector.GetLayer()
+    geom_index = rtree.index.Index()
+    geom_list = []
+    for index in range(layer.GetFeatureCount()):
+        feature = layer.GetFeature(index)
+        geom = feature.GetGeometryRef()
+        shapely_geom = shapely.wkb.loads(geom.ExportToWkt())
+        shapely_prep_geom = shapely.prepared.prep(shapely_geom)
+        geom_list.append(shapely_prep_geom)
+        geom_index.insert(index, shapely_geom.bounds)
+
+    return geom_index, geom_list
 
 
 def schedule_upload_blob_and_overviews(
@@ -1458,7 +1460,8 @@ def average_rasters(*raster_list, clamp=None):
 
     Parameters:
         raster_list (list of string): list of rasters to average over.
-        clamp (float): value to clamp the individual raster to before the average.
+        clamp (float): value to clamp the individual raster to before the
+            average.
 
     Returns:
         None.
@@ -2201,16 +2204,18 @@ def mult_rasters(raster_a_path, raster_b_path, target_path):
          (nodata_b, 'raw'), (_MULT_NODATA, 'raw')], _mult_raster_op,
         target_path, gdal.GDT_Float32, _MULT_NODATA)
 
+
 def add_op(target_nodata, *array_list):
-        result = numpy.zeros(array_list[0].shape, dtype=numpy.float32)
-        valid_mask = numpy.zeros(result.shape, dtype=numpy.bool)
-        for array in array_list:
-            # nodata values will be < 0
-            local_valid_mask = array >= 0
-            valid_mask |= local_valid_mask
-            result[local_valid_mask] += array[local_valid_mask]
-        result[~valid_mask] = target_nodata
-        return result
+    """Add & return arrays in ``array_list`` but ignore ``target_nodata``."""
+    result = numpy.zeros(array_list[0].shape, dtype=numpy.float32)
+    valid_mask = numpy.zeros(result.shape, dtype=numpy.bool)
+    for array in array_list:
+        # nodata values will be < 0
+        local_valid_mask = array >= 0
+        valid_mask |= local_valid_mask
+        result[local_valid_mask] += array[local_valid_mask]
+    result[~valid_mask] = target_nodata
+    return result
 
 
 def schedule_sum_and_aggregate(

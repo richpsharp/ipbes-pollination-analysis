@@ -69,7 +69,13 @@ WORKING_DIR = 'workspace'
 OUTPUT_DIR = os.path.join(WORKING_DIR, 'outputs')
 ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')
-GOOGLE_BUCKET_KEY_PATH = "ecoshard-202992-key.json"
+
+try:
+    GOOGLE_BUCKET_KEY_PATH = sys.argv[1]
+except IndexError:
+    raise RuntimeError("Expected command line argument of path to bucket key")
+UPLOAD_RESULTS = len(sys.argv) == 3 and 'upload' == sys.argv[2]
+
 NODATA = -9999
 N_WORKERS = max(1, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
@@ -1290,9 +1296,10 @@ def main():
         os.path.join(
             CHURN_DIR, 'blob_upload_complete',
             blob_path.replace('/', '_'))}.complete'''
-    google_bucket_upload(
-        target_summary_shapefile_path, GOOGLE_BUCKET_ID,
-        blob_path, GOOGLE_BUCKET_KEY_PATH, file_upload_touch_file)
+    if UPLOAD_RESULTS:
+        google_bucket_upload(
+            target_summary_shapefile_path, GOOGLE_BUCKET_ID,
+            blob_path, GOOGLE_BUCKET_KEY_PATH, file_upload_touch_file)
 
     # prod_poll_dep_realized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
     # prod_poll_dep_unrealized_en|va|fo_1d_cur|ssp1|ssp3|ssp5
@@ -1364,6 +1371,8 @@ def upload_blob(task_graph, base_path, dependent_task):
         None.
 
     """
+    if not UPLOAD_RESULTS:
+        return
     # get the relative blob path from the workspace and use Google blob
     # notation for directories
     blob_path = (

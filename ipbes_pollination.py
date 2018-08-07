@@ -18,7 +18,8 @@ import multiprocessing
 import tempfile
 
 import rtree
-import shapely
+import shapely.wkb
+import shapely.prepared
 from osgeo import gdal
 from osgeo import ogr
 import google.cloud.client

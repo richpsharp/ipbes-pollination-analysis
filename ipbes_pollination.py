@@ -72,7 +72,7 @@ ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')
 
 try:
-    GOOGLE_BUCKET_KEY_PATH = sys.argv[1]
+    GOOGLE_BUCKET_KEY_PATH = os.path.normpath(sys.argv[1])
 except IndexError:
     raise RuntimeError("Expected command line argument of path to bucket key")
 UPLOAD_RESULTS = len(sys.argv) == 3 and 'upload' == sys.argv[2]

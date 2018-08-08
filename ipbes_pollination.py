@@ -1194,7 +1194,7 @@ def main():
 
     countries_myregions_df = pandas.read_csv(
         'countries_myregions_final_md5_bee74896fa41d0deb2161c65e2d97a32.csv',
-        usecols=['Country', 'myregions'], sep=None, engine='python')
+        usecols=['Country', 'myregions'], sep=';', engine='python')
     country_to_region_dict = {
         row[1][0]: row[1][1] for row in countries_myregions_df.iterrows()}
 

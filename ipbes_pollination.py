@@ -1193,8 +1193,8 @@ def main():
     task_graph.join()
 
     countries_myregions_df = pandas.read_csv(
-        'countries_myregions.csv', usecols=['country', 'myregions'],
-        sep=None, engine='python')
+        'countries_myregions_final_md5_bee74896fa41d0deb2161c65e2d97a32.csv',
+        usecols=['country', 'myregions'], sep=None, engine='python')
     country_to_region_dict = {
         row[1][0]: row[1][1] for row in countries_myregions_df.iterrows()}
 

@@ -1379,20 +1379,18 @@ def upload_blob(task_graph, base_path, dependent_task):
     blob_path = (
         os.path.join(BLOB_ROOT, os.path.relpath(
             base_path, WORKING_DIR)).replace(os.sep, '/'))
-    blob_hash_path = f'%s_{HG_SUFFIX}%s' % (
-        os.path.splitext(blob_path))
     file_upload_touch_file = f'''{
         os.path.join(
             CHURN_DIR, 'blob_upload_complete',
-            blob_hash_path.replace('/', '_'))}.complete'''
+            blob_path.replace('/', '_'))}.complete'''
     __ = task_graph.add_task(
         func=google_bucket_upload,
         args=(
-            base_path, GOOGLE_BUCKET_ID, blob_hash_path,
+            base_path, GOOGLE_BUCKET_ID, blob_path,
             GOOGLE_BUCKET_KEY_PATH, file_upload_touch_file),
         target_path_list=[file_upload_touch_file],
         dependent_task_list=[dependent_task],
-        task_name=f'google bucket upload {blob_hash_path}')
+        task_name=f'google bucket upload {blob_path}')
 
 
 def calculate_total_requirements(

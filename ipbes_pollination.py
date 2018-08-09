@@ -1269,40 +1269,76 @@ def main():
 
         target_summary_grid_layer.SetFeature(grid_feature)
 
-    # this one does the rasters
+    # this one does the rasters, we can load them all at once because they
+    # are so small, then we can do each feature individually
+    array_feature_id_map = {}
     for field_name, raster_path in itertools.chain(
-                summary_raster_path_map.items(),
-                gpw_1d_path_map.items()):
+            summary_raster_path_map.items(),
+            gpw_1d_path_map.items()):
         raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
         band = raster.GetRasterBand(1)
         x_size = band.XSize
         y_size = band.YSize
-        # assume the array fits in memory, it should since it's 1 degree
-        # resolution
-        raster_array = band.ReadAsArray()
+        array_feature_id_map[field_name] = band.ReadAsArray()
         gt = raster.GetGeoTransform()
         band = None
         raster = None
-        LOGGER.debug("summarizing raster %s", field_name)
 
-        for feature_index in range(
-                target_summary_grid_layer.GetFeatureCount()):
-            grid_feature = target_summary_grid_layer.GetFeature(feature_index)
-            grid_feature_geom = grid_feature.GetGeometryRef()
+    sample_raster_path = next(summary_raster_path_map.values())
+    sample_raster = gdal.OpenEx(sample_raster_path, gdal.OF_RASTER)
+    gt = sample_raster.GetGeoTransform()
+    sample_raster = None
 
-            centroid = grid_feature_geom.Centroid()
-            long_coord = centroid.GetX()
-            lat_coord = centroid.GetY()
+    total_grid_count = target_summary_grid_layer.GetFeatureCount()
+    for grid_index, grid_feature in enumerate(target_summary_grid_layer):
 
-            x_coord = int((long_coord - gt[0]) / gt[1])
-            if not 0 <= x_coord < x_size:
-                continue
-            y_coord = int((lat_coord - gt[3]) / gt[5])
-            if not 0 <= y_coord < y_size:
-                continue
+        current_time = time.time()
+        if current_time - last_time > 5.0:
+            last_time = current_time
+            LOGGER.debug(
+                "processing grid intersection %.2f%% complete",
+                (100.0 * (grid_index+1)) / total_grid_count)
+
+        grid_feature_geom_ref = grid_feature.GetGeometryRef()
+        centroid = grid_feature_geom_ref.Centroid()
+
+        grid_feature_geom = shapely.wkb.loads(
+            grid_feature.GetGeometryRef().ExportToWkb())
+
+        for country_index in country_rtree.intersection(
+                grid_feature_geom.bounds):
+            if country_geom_list[country_index].intersects(grid_feature_geom):
+                country_name = country_layer.GetFeature(
+                    country_index).GetField('name')
+                grid_feature.SetField('country', country_name)
+                try:
+                    grid_feature.SetField(
+                        'region', country_to_region_dict[country_name])
+                except KeyError:
+                    grid_feature.SetField('region', 'UNKNOWN')
+                break
+
+        for hunger_index in hunger_rtree.intersection(
+                grid_feature_geom.bounds):
+            if hunger_geom_list[hunger_index].intersects(grid_feature_geom):
+                hunger_feature = hunger_layer.GetFeature(hunger_index)
+                grid_feature.SetField(
+                    'PCTU5', hunger_feature.GetField('PCTU5'))
+                grid_feature.SetField('UW', hunger_feature.GetField('UW'))
+
+        long_coord = centroid.GetX()
+        lat_coord = centroid.GetY()
+
+        x_coord = int((long_coord - gt[0]) / gt[1])
+        if not 0 <= x_coord < x_size:
+            continue
+        y_coord = int((lat_coord - gt[3]) / gt[5])
+        if not 0 <= y_coord < y_size:
+            continue
+        for field_name, raster_array in array_feature_id_map.items():
             pixel_value = raster_array[y_coord, x_coord]
             grid_feature.SetField(field_name, float(pixel_value))
-            target_summary_grid_layer.SetFeature(grid_feature)
+        target_summary_grid_layer.SetFeature(grid_feature)
 
     blob_path = os.path.join(
         BLOB_ROOT, os.path.basename(

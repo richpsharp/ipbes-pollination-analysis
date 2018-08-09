@@ -1233,7 +1233,6 @@ def main():
     last_time = time.time()
     for grid_index in range(
             target_summary_grid_layer.GetFeatureCount()):
-        LOGGER.debug("grid index %d", grid_index)
         current_time = time.time()
         if current_time - last_time > 5.0:
             last_time = current_time

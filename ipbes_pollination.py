@@ -1246,7 +1246,6 @@ def main():
 
         for country_index in country_rtree.intersection(
                 grid_feature_geom.bounds):
-            LOGGER.debug("country index %d", country_index)
             if country_geom_list[country_index].intersects(grid_feature_geom):
                 country_name = country_layer.GetFeature(
                     country_index).GetField('name')
@@ -1260,7 +1259,6 @@ def main():
 
         for hunger_index in hunger_rtree.intersection(
                 grid_feature_geom.bounds):
-            LOGGER.debug("hunger index %d", country_index)
             if hunger_geom_list[hunger_index].intersects(grid_feature_geom):
                 hunger_feature = hunger_layer.GetFeature(hunger_index)
                 grid_feature.SetField(

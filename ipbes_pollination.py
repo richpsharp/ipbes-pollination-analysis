@@ -1228,8 +1228,15 @@ def main():
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
 
+    last_time = time.time()
     for feature_index in range(
             target_summary_grid_layer.GetFeatureCount()):
+        current_time = time.time()
+        if last_time - current_time > 5.0:
+            LOGGER.debug(
+                "processing grid country intersection %.2f%% complete",
+                (100.0 * (feature_index+1)) /
+                target_summary_grid_layer.GetFeatureCount())
         grid_feature = target_summary_grid_layer.GetFeature(feature_index)
         grid_feature_geom = shapely.wkb.loads(
             grid_feature.GetGeometryRef().ExportToWkb())

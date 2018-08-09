@@ -1198,7 +1198,7 @@ def main():
         'countries_myregions_final_md5_bee74896fa41d0deb2161c65e2d97a32.csv',
         usecols=['Country', 'myregions'], sep=';')
     country_to_region_dict = {
-        row[1][0]: row[1][1] for row in countries_myregions_df.iterrows()}
+        row[1][1]: row[1][0] for row in countries_myregions_df.iterrows()}
 
     grid_shapefile_path = os.path.join(ECOSHARD_DIR, 'grid_1_degree.shp')
     grid_shapefile_vector = gdal.OpenEx(grid_shapefile_path, gdal.OF_VECTOR)

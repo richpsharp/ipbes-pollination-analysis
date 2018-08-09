@@ -245,13 +245,13 @@ def main():
     # were taken from Monfreda et al. (2008) for 115 crops (permanent link to
     # crop yield folder). These yields were multiplied by crop pollination
     # dependency to calculate the pollination-dependent crop yield for each 5
-    # min grid cell. Note the monfredia maps are in units of per-hectare
+    # min grid cell. Note the monfreda maps are in units of per-hectare
     # yields
 
     yield_and_harea_zip_url = (
         'https://storage.cloud.google.com/ecoshard-root/ipbes/'
-        'monfredia_2008_observed_yield_and_harea_'
-        'md5_f4f7c3d3acf173c34d54fa6ac4d126e8.zip')
+        'monfreda_2008_observed_yield_and_harea_'
+        'md5_49b529f57071cc85abbd02b6e105089b.zip')
 
     yield_and_harea_zip_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(yield_and_harea_zip_url))

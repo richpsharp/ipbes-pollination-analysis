@@ -1234,7 +1234,8 @@ def main():
         grid_feature_geom = shapely.wkb.loads(
             grid_feature.GetGeometryRef().ExportToWkb())
 
-        for country_index in country_rtree.intersection(grid_feature.bounds):
+        for country_index in country_rtree.intersection(
+                grid_feature_geom.bounds):
             if country_geom_list[country_index].intersects(grid_feature_geom):
                 country_name = country_layer.GetFeature(
                     country_index).GetField('name')

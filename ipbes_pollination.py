@@ -1322,7 +1322,7 @@ def build_spatial_index(vector_path):
     for index in range(layer.GetFeatureCount()):
         feature = layer.GetFeature(index)
         geom = feature.GetGeometryRef()
-        shapely_geom = shapely.wkb.loads(geom.ExportToWkt())
+        shapely_geom = shapely.wkb.loads(geom.ExportToWkb())
         shapely_prep_geom = shapely.prepared.prep(shapely_geom)
         geom_list.append(shapely_prep_geom)
         geom_index.insert(index, shapely_geom.bounds)

@@ -248,29 +248,30 @@ def main():
     # min grid cell. Note the monfredia maps are in units of per-hectare
     # yields
 
-    yield_zip_url = (
+    yield_and_harea_zip_url = (
         'https://storage.cloud.google.com/ecoshard-root/ipbes/'
-        'monfreda_2008_observed_yield_md5_54c6b8e564973739ba75c8e54ac6f051.'
-        'zip')
+        'monfredia_2008_observed_yield_and_harea_'
+        'md5_f4f7c3d3acf173c34d54fa6ac4d126e8.zip')
 
-    yield_zip_path = os.path.join(
-        ECOSHARD_DIR, os.path.basename(yield_zip_url))
+    yield_and_harea_zip_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(yield_and_harea_zip_url))
 
     yield_zip_fetch_task = task_graph.add_task(
         func=google_bucket_fetch_and_validate,
         args=(
-            yield_zip_url, GOOGLE_BUCKET_KEY_PATH,
-            yield_zip_path),
-        target_path_list=[yield_zip_path],
-        task_name=f'fetch {os.path.basename(yield_zip_path)}')
+            yield_and_harea_zip_url, GOOGLE_BUCKET_KEY_PATH,
+            yield_and_harea_zip_path),
+        target_path_list=[yield_and_harea_zip_path],
+        task_name=f'fetch {os.path.basename(yield_and_harea_zip_path)}')
 
     zip_touch_file_path = os.path.join(
-        os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield.txt')
+        os.path.dirname(yield_and_harea_zip_path),
+        'monfreda_2008_observed_yield_and_harea.txt')
     unzip_yield_task = task_graph.add_task(
         func=unzip_file,
         args=(
-            yield_zip_path, os.path.dirname(yield_zip_path),
-            zip_touch_file_path),
+            yield_and_harea_zip_path,
+            os.path.dirname(yield_and_harea_zip_path), zip_touch_file_path),
         target_path_list=[zip_touch_file_path],
         dependent_task_list=[yield_zip_fetch_task],
         task_name=f'unzip monfreda_2008_observed_yield')
@@ -287,8 +288,9 @@ def main():
         target_path_list=[landcover_path],
         task_name=f'fetch {landcover_key}')
 
-    yield_raster_dir = os.path.join(
-        os.path.dirname(yield_zip_path), 'monfreda_2008_observed_yield')
+    yield_and_harea_raster_dir = os.path.join(
+        os.path.dirname(yield_and_harea_zip_path),
+        'monfreda_2008_observed_yield_and_harea')
 
     prod_total_nut_10s_task_path_map = {}
     poll_dep_prod_nut_10s_task_path_map = {}
@@ -309,7 +311,7 @@ def main():
             func=create_prod_nutrient_raster,
             args=(
                  crop_nutrient_table_path, nutrient_name,
-                 yield_raster_dir, False, landcover_path,
+                 yield_and_harea_raster_dir, False, landcover_path,
                  yield_total_nut_10km_path, yield_total_nut_10s_path,
                  prod_total_nut_10s_path),
             target_path_list=[
@@ -342,7 +344,7 @@ def main():
             func=create_prod_nutrient_raster,
             args=(
                 crop_nutrient_table_path, nutrient_name,
-                yield_raster_dir, True, landcover_path,
+                yield_and_harea_raster_dir, True, landcover_path,
                 poll_dep_yield_nut_10km_path, poll_dep_yield_nut_10s_path,
                 poll_dep_prod_nut_10s_path),
             target_path_list=[
@@ -2039,7 +2041,8 @@ def _make_logger_callback(message):
 
 
 def total_yield_op(
-        yield_nodata, pollination_yield_factor_list, *crop_yield_array_list):
+        yield_nodata, pollination_yield_factor_list,
+        *crop_yield_harea_array_list):
     """Calculate total yield.
 
     Parameters:
@@ -2047,20 +2050,25 @@ def total_yield_op(
             ``crop_yield_array_list```.
         pollination_yield_factor_list (list of float): list of non-refuse
             proportion of yield that is pollination dependent.
-        crop_yield_array_list (list of numpy.ndarray): list of 2D arrays of
-            yield (tons/Ha) for crops that correlate in order with the
-            ``pollination_yield_factor_list``.
+        crop_yield_harea_array_list (list of numpy.ndarray): list of length
+            n of 2D arrays of n/2 yield (tons/Ha) for crops that correlate in
+            order with the ``pollination_yield_factor_list`` followed by
+            n/2 harea (proportional area) of those crops.
 
     """
-    result = numpy.empty(crop_yield_array_list[0].shape, dtype=numpy.float32)
+    result = numpy.empty(
+        crop_yield_harea_array_list[0].shape, dtype=numpy.float32)
     result[:] = 0.0
     all_valid = numpy.zeros(result.shape, dtype=numpy.bool)
 
-    for crop_index, crop_array in enumerate(crop_yield_array_list):
+    n_crops = len(crop_yield_harea_array_list) // 2
+    for crop_index in range(n_crops):
+        crop_array = crop_yield_harea_array_list[crop_index]
+        harea_array = crop_yield_harea_array_list[crop_index + n_crops]
         valid_mask = crop_array != yield_nodata
         all_valid |= valid_mask
         result[valid_mask] += (
-            crop_array[valid_mask] *
+            crop_array[valid_mask] * harea_array[valid_mask] *
             pollination_yield_factor_list[crop_index])
     result[~all_valid] = yield_nodata
     return result
@@ -2085,7 +2093,7 @@ def density_to_value_op(density_array, area_array, density_nodata):
 
 
 def create_prod_nutrient_raster(
-        crop_nutrient_df_path, nutrient_name, yield_raster_dir,
+        crop_nutrient_df_path, nutrient_name, yield_and_harea_raster_dir,
         consider_pollination, sample_target_raster_path,
         target_10km_yield_path, target_10s_yield_path,
         target_10s_production_path):
@@ -2097,8 +2105,9 @@ def create_prod_nutrient_raster(
             `Pollination dependence crop`.
         nutrient_name (str): nutrient name to use to index into the crop
             data frame.
-        yield_raster_dir (str): path to a directory that has files of the
-            format `[crop_name]_yield_map.tif` where `crop_name` is a value
+        yield_and_harea_raster_dir (str): path to a directory that has files
+            of the format `[crop_name]_yield.tif` and
+            `[crop_name]_harea.tif` where `crop_name` is a value
             in the `filenm` column of `crop_nutrient_df`.
         consider_pollination (bool): if True, multiply yields by pollinator
             dependence ratio.
@@ -2123,12 +2132,16 @@ def create_prod_nutrient_raster(
     """
     crop_nutrient_df = pandas.read_csv(crop_nutrient_df_path)
     yield_raster_path_list = []
+    harea_raster_path_list = []
     pollination_yield_factor_list = []
     for _, row in crop_nutrient_df.iterrows():
         yield_raster_path = os.path.join(
-            yield_raster_dir, f"{row['filenm']}_yield_map.tif")
+            yield_and_harea_raster_dir, f"{row['filenm']}_yield.tif")
+        harea_raster_path = os.path.join(
+            yield_and_harea_raster_dir, f"{row['filenm']}_harea.tif")
         if os.path.exists(yield_raster_path):
             yield_raster_path_list.append(yield_raster_path)
+            harea_raster_path_list.append(harea_raster_path)
             pollination_yield_factor_list.append(
                 (1. - row['Percent refuse'] / 100.) * row[nutrient_name])
             if consider_pollination:
@@ -2146,8 +2159,9 @@ def create_prod_nutrient_raster(
 
     pygeoprocessing.raster_calculator(
         [(yield_nodata, 'raw'), (pollination_yield_factor_list, 'raw')] +
-        [(x, 1) for x in yield_raster_path_list], total_yield_op,
-        target_10km_yield_path, gdal.GDT_Float32, yield_nodata),
+        [(x, 1) for x in yield_raster_path_list + harea_raster_path],
+        total_yield_op, target_10km_yield_path, gdal.GDT_Float32,
+        yield_nodata),
 
     y_lat_array = numpy.linspace(
         sample_target_raster_info['geotransform'][3],

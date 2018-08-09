@@ -2159,7 +2159,7 @@ def create_prod_nutrient_raster(
 
     pygeoprocessing.raster_calculator(
         [(yield_nodata, 'raw'), (pollination_yield_factor_list, 'raw')] +
-        [(x, 1) for x in yield_raster_path_list + harea_raster_path],
+        [(x, 1) for x in yield_raster_path_list + harea_raster_path_list],
         total_yield_op, target_10km_yield_path, gdal.GDT_Float32,
         yield_nodata),
 

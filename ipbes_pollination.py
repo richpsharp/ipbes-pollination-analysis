@@ -1247,7 +1247,8 @@ def main():
                     grid_feature.SetField('region', 'UNKNOWN')
                 break
 
-        for hunger_index in hunger_rtree.intersection(grid_feature.bounds):
+        for hunger_index in hunger_rtree.intersection(
+                grid_feature_geom.bounds):
             if hunger_geom_list[hunger_index].intersects(grid_feature_geom):
                 hunger_feature = hunger_layer.GetFeature(hunger_index)
                 grid_feature.SetField(

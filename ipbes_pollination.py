@@ -1232,43 +1232,6 @@ def main():
         target_summary_grid_layer.CreateField(
             ogr.FieldDefn(field_name, ogr.OFTReal))
 
-    last_time = time.time()
-    for grid_index in range(
-            target_summary_grid_layer.GetFeatureCount()):
-        current_time = time.time()
-        if current_time - last_time > 5.0:
-            last_time = current_time
-            LOGGER.debug(
-                "processing grid country intersection %.2f%% complete",
-                (100.0 * (grid_index+1)) /
-                target_summary_grid_layer.GetFeatureCount())
-        grid_feature = target_summary_grid_layer.GetFeature(grid_index)
-        grid_feature_geom = shapely.wkb.loads(
-            grid_feature.GetGeometryRef().ExportToWkb())
-
-        for country_index in country_rtree.intersection(
-                grid_feature_geom.bounds):
-            if country_geom_list[country_index].intersects(grid_feature_geom):
-                country_name = country_layer.GetFeature(
-                    country_index).GetField('name')
-                grid_feature.SetField('country', country_name)
-                try:
-                    grid_feature.SetField(
-                        'region', country_to_region_dict[country_name])
-                except KeyError:
-                    grid_feature.SetField('region', 'UNKNOWN')
-                break
-
-        for hunger_index in hunger_rtree.intersection(
-                grid_feature_geom.bounds):
-            if hunger_geom_list[hunger_index].intersects(grid_feature_geom):
-                hunger_feature = hunger_layer.GetFeature(hunger_index)
-                grid_feature.SetField(
-                    'PCTU5', hunger_feature.GetField('PCTU5'))
-                grid_feature.SetField('UW', hunger_feature.GetField('UW'))
-
-        target_summary_grid_layer.SetFeature(grid_feature)
-
     # this one does the rasters, we can load them all at once because they
     # are so small, then we can do each feature individually
     array_feature_id_map = {}
@@ -1284,11 +1247,13 @@ def main():
         band = None
         raster = None
 
-    sample_raster_path = next(summary_raster_path_map.values())
+    sample_raster_path = next(iter(summary_raster_path_map.values()))
     sample_raster = gdal.OpenEx(sample_raster_path, gdal.OF_RASTER)
     gt = sample_raster.GetGeoTransform()
     sample_raster = None
 
+    # process one grid at a time
+    last_time = time.time()
     total_grid_count = target_summary_grid_layer.GetFeatureCount()
     for grid_index, grid_feature in enumerate(target_summary_grid_layer):
 

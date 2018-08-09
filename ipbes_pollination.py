@@ -2250,7 +2250,8 @@ def schedule_sum_and_aggregate(
 def schedule_aggregate_to_degree(
         task_graph, base_raster_path, aggregate_func, base_raster_task):
     """Schedule an aggregate and upload of 1D approximation."""
-    one_degree_raster_path = base_raster_path.replace('_10s_', '_1d_')
+    one_degree_raster_path = (
+        base_raster_path.replace('_10s_', '_1d_').replace('_30s_', '_1d_'))
     one_degree_task = task_graph.add_task(
         func=aggregate_to_degree,
         args=(base_raster_path, aggregate_func, one_degree_raster_path),

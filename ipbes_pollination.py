@@ -1209,8 +1209,10 @@ def main():
 
     tm_world_borders_path = os.path.join(
         ECOSHARD_DIR, 'TM_WORLD_BORDERS-0.3.shp')
+    LOGGER.debug("build country spatial index")
     country_rtree, country_geom_list = build_spatial_index(
         tm_world_borders_path)
+    LOGGER.debug("build hunger spatial index")
     hunger_path = os.path.join(ECOSHARD_DIR, 'hunger.shp')
     hunger_rtree, hunger_geom_list = build_spatial_index(hunger_path)
 
@@ -1233,6 +1235,7 @@ def main():
             target_summary_grid_layer.GetFeatureCount()):
         current_time = time.time()
         if last_time - current_time > 5.0:
+            last_time = current_time
             LOGGER.debug(
                 "processing grid country intersection %.2f%% complete",
                 (100.0 * (feature_index+1)) /

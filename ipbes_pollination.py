@@ -1231,21 +1231,23 @@ def main():
             ogr.FieldDefn(field_name, ogr.OFTReal))
 
     last_time = time.time()
-    for feature_index in range(
+    for grid_index in range(
             target_summary_grid_layer.GetFeatureCount()):
+        LOGGER.debug("grid index %d", grid_index)
         current_time = time.time()
-        if last_time - current_time > 5.0:
+        if current_time - last_time > 5.0:
             last_time = current_time
             LOGGER.debug(
                 "processing grid country intersection %.2f%% complete",
-                (100.0 * (feature_index+1)) /
+                (100.0 * (grid_index+1)) /
                 target_summary_grid_layer.GetFeatureCount())
-        grid_feature = target_summary_grid_layer.GetFeature(feature_index)
+        grid_feature = target_summary_grid_layer.GetFeature(grid_index)
         grid_feature_geom = shapely.wkb.loads(
             grid_feature.GetGeometryRef().ExportToWkb())
 
         for country_index in country_rtree.intersection(
                 grid_feature_geom.bounds):
+            LOGGER.debug("country index %d", country_index)
             if country_geom_list[country_index].intersects(grid_feature_geom):
                 country_name = country_layer.GetFeature(
                     country_index).GetField('name')
@@ -1259,6 +1261,7 @@ def main():
 
         for hunger_index in hunger_rtree.intersection(
                 grid_feature_geom.bounds):
+            LOGGER.debug("hunger index %d", country_index)
             if hunger_geom_list[hunger_index].intersects(grid_feature_geom):
                 hunger_feature = hunger_layer.GetFeature(hunger_index)
                 grid_feature.SetField(

@@ -1073,28 +1073,26 @@ def main():
             for gpw_id in nutritional_needs_map])
         pop_task_list, pop_path_list = zip(*pop_task_path_list)
 
-        tot_nut_requirements_path = os.path.join(
+        nut_requirements_path = os.path.join(
             OUTPUT_DIR,
             f'nut_req_{nut_id}_10s_cur.tif')
-        total_requirements_task = task_graph.add_task(
+        nut_requirements_task = task_graph.add_task(
             func=calculate_total_requirements,
             args=(
-                pop_path_list, nut_need_list, tot_nut_requirements_path),
-            target_path_list=[tot_nut_requirements_path],
+                pop_path_list, nut_need_list, nut_requirements_path),
+            target_path_list=[nut_requirements_path],
             dependent_task_list=pop_task_list,
             task_name=f"""tot nut requirements {
-                os.path.basename(tot_nut_requirements_path)}""",
+                os.path.basename(nut_requirements_path)}""",
             priority=100,)
         schedule_upload_blob_and_overviews(
-            task_graph, tot_nut_requirements_path,
-            total_requirements_task)
+            task_graph, nut_requirements_path,
+            nut_requirements_task)
         tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
-            task_graph, tot_nut_requirements_path,
-            numpy.sum, total_requirements_task)
-        summary_raster_path_map[
-            f'''nut_req_{
-                nutrient_id}_1d_{landcover_short_suffix}'''] = (
-                    tot_nut_deg_path)
+            task_graph, nut_requirements_path,
+            numpy.sum, nut_requirements_task)
+        summary_raster_path_map[f'''nut_req_{nutrient_id}_1d_cur'''] = (
+            tot_nut_deg_path)
 
         # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
         # contribution to nutrition," the contribution of wild pollination to
@@ -1146,8 +1144,7 @@ def main():
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
             summary_raster_path_map[
-                f'''poll_cont_nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = (
-                    poll_cont_nut_req_path)
+                f'''nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = nut_req_path
 
             # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to nutrition," the contribution of wild pollination
@@ -1170,6 +1167,9 @@ def main():
                     os.path.basename(poll_cont_nut_req_path)}''')
             prod_poll_dep_1d_task_path_map[(f'ssp{ssp_id}', nut_id)] = (
                 poll_cont_nut_task, poll_cont_nut_req_path)
+            summary_raster_path_map[
+                f'''poll_cont_nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = (
+                    poll_cont_nut_req_path)
 
     for scenario_id in ('cur', 'ssp1', 'ssp3', 'ssp5'):
         # poll_cont_nut_req_avg_1d_cur|ssp1|ssp3|ssp5: average contribution of

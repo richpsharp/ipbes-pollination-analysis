@@ -1145,7 +1145,8 @@ def main():
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
             summary_raster_path_map[
-                f'''nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = nut_req_path
+                f'''nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = (
+                    tot_nut_deg_path)
 
             # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
             # contribution to nutrition," the contribution of wild pollination

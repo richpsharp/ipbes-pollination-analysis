@@ -1045,7 +1045,8 @@ def main():
                 total_ssp_pop_1d_path))
         schedule_upload_blob_and_overviews(
             task_graph, total_ssp_pop_1d_path, total_ssp_pop_1d_task)
-        gpw_1d_path_map[f'ssp{ssp_id}'] = total_ssp_pop_1d_path
+        gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_ssp{ssp_id}'] = (
+            total_ssp_pop_1d_path)
 
     # 2)
     # calculate the total nutritional needs per pixel for cur ssp1..5 scenario

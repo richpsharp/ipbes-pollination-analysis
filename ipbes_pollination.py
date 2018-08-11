@@ -776,10 +776,6 @@ def main():
             schedule_upload_blob_and_overviews(
                 task_graph, poll_cont_prod_nut_1d_path,
                 poll_cont_prod_nut_task)
-            summary_raster_path_map[
-                f'''poll_cont_prod_{
-                    nut_id}_1d_{landcover_short_suffix}'''] = (
-                        poll_cont_prod_nut_1d_path)
 
         poll_cont_prod_avg_path = os.path.join(
             OUTPUT_DIR, f'''poll_cont_prod_avg_10s_{
@@ -813,6 +809,9 @@ def main():
         schedule_upload_blob_and_overviews(
             task_graph, poll_cont_prod_1d_avg_path,
             poll_cont_prod_1d_nut_avg_task)
+        summary_raster_path_map[f'''poll_cont_prod_avg_1d_{
+            landcover_short_suffix}'''] = poll_cont_prod_1d_avg_path
+
 
     # 1.3.    NUTRITION PROVIDED BY WILD POLLINATORS
     # 1.3.1.  Overview

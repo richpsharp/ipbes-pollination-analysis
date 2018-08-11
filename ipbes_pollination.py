@@ -37,10 +37,10 @@ HG_REV = subprocess.check_output(['hg', 'id', '--id']).decode('utf-8').strip()
 if HG_REV.endswith('+'):
     raise RuntimeError(
         "Current repository has uncommitted changes. Commit them.")
-HG_SUFFIX = f'hg_{HG_REV}'
-
 HG_DATE = subprocess.check_output(
-    ['hg', 'log', '-l', '1', '--template', '{date}']).decode('utf-8').strip()
+    ['hg', 'log', '-l', '1', '--template', '{date|isodate}']).decode(
+        'utf-8').strip().replace(' ', '_')
+HG_SUFFIX = f'hg_{HG_DATE}_{HG_REV}'
 
 # set a 1GB limit for the cache
 gdal.SetCacheMax(2**30)
@@ -82,7 +82,7 @@ N_WORKERS = max(1, multiprocessing.cpu_count())
 DELAYED_START = N_WORKERS >= 0
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
-BLOB_ROOT = f'''ipbes_pollination_result_{HG_DATE}_{HG_REV}'''
+BLOB_ROOT = f'''ipbes_pollination_result'''
 
 
 def main():
@@ -1210,7 +1210,7 @@ def main():
     grid_shapefile_vector = gdal.OpenEx(grid_shapefile_path, gdal.OF_VECTOR)
     geopackage_driver = gdal.GetDriverByName('GPKG')
     target_summary_shapefile_path = os.path.join(
-        OUTPUT_DIR, 'ipbes_pollination_summary.gpkg')
+        OUTPUT_DIR, f'ipbes_pollination_summary_{HG_SUFFIX}.gpkg')
     target_summary_grid_vector = geopackage_driver.CreateCopy(
         target_summary_shapefile_path, grid_shapefile_vector)
     target_summary_grid_layer = target_summary_grid_vector.GetLayer()

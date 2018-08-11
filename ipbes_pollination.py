@@ -294,18 +294,18 @@ def main():
 
     prod_total_nut_10s_task_path_map = {}
     poll_dep_prod_nut_10s_task_path_map = {}
-    for nutrient_id, nutrient_name in [
+    for nut_id, nutrient_name in [
             ('en', 'Energy'), ('va', 'VitA'), ('fo', 'Folate')]:
         # total annual production of nutrient
         yield_total_nut_10km_path = os.path.join(
             CHURN_DIR, 'monfreda_2008_yield_nutrient_rasters',
-            f'monfreda_2008_yield_total_{nutrient_id}_10km.tif')
+            f'monfreda_2008_yield_total_{nut_id}_10km.tif')
         yield_total_nut_10s_path = os.path.join(
             CHURN_DIR, 'monfreda_2008_yield_nutrient_rasters',
-            f'monfreda_2008_yield_total_{nutrient_id}_10s.tif')
+            f'monfreda_2008_yield_total_{nut_id}_10s.tif')
         prod_total_nut_10s_path = os.path.join(
             CHURN_DIR, 'monfreda_2008_prod_nutrient_rasters',
-            f'monfreda_2008_prod_total_{nutrient_id}_10s.tif')
+            f'monfreda_2008_prod_total_{nut_id}_10s.tif')
 
         prod_total_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
@@ -327,19 +327,19 @@ def main():
                 prod_total_nut_10s_path]:
             schedule_upload_blob_and_overviews(
                 task_graph, upload_path, prod_total_task)
-        prod_total_nut_10s_task_path_map[nutrient_id] = (
+        prod_total_nut_10s_task_path_map[nut_id] = (
             prod_total_task, prod_total_nut_10s_path)
 
         # pollination-dependent annual production of nutrient
         poll_dep_yield_nut_10km_path = os.path.join(
             CHURN_DIR, 'monfreda_2008_yield_poll_dep_rasters',
-            f'monfreda_2008_yield_poll_dep_{nutrient_id}_10km.tif')
+            f'monfreda_2008_yield_poll_dep_{nut_id}_10km.tif')
         poll_dep_yield_nut_10s_path = os.path.join(
             CHURN_DIR, 'monfreda_2008_yield_poll_dep_rasters',
-            f'monfreda_2008_yield_poll_dep_{nutrient_id}_10s.tif')
+            f'monfreda_2008_yield_poll_dep_{nut_id}_10s.tif')
         poll_dep_prod_nut_10s_path = os.path.join(
             CHURN_DIR, 'monfreda_2008_prod_poll_dep_rasters',
-            f'monfreda_2008_prod_poll_dep_{nutrient_id}_10s.tif')
+            f'monfreda_2008_prod_poll_dep_{nut_id}_10s.tif')
         pol_dep_prod_task = task_graph.add_task(
             func=create_prod_nutrient_raster,
             args=(
@@ -358,7 +358,7 @@ def main():
                 poll_dep_prod_nut_10s_path]:
             schedule_upload_blob_and_overviews(
                 task_graph, upload_path, pol_dep_prod_task)
-        poll_dep_prod_nut_10s_task_path_map[nutrient_id] = (
+        poll_dep_prod_nut_10s_task_path_map[nut_id] = (
             pol_dep_prod_task, poll_dep_prod_nut_10s_path)
 
     # The proportional area of natural within 2 km was calculated for every
@@ -494,13 +494,13 @@ def main():
         nat_cont_task_path_map = {}
         poll_cont_prod_map = {}
         poll_cont_1d_prod_map = {}
-        for nutrient_id in ('en', 'va', 'fo'):
+        for nut_id in ('en', 'va', 'fo'):
             tot_prod_task, tot_prod_path = (
-                prod_total_nut_10s_task_path_map[nutrient_id])
+                prod_total_nut_10s_task_path_map[nut_id])
 
             prod_total_potential_path = os.path.join(
                 OUTPUT_DIR, f'''prod_total_potential_{
-                    nutrient_id}_10s_{landcover_short_suffix}.tif''')
+                    nut_id}_10s_{landcover_short_suffix}.tif''')
             prod_total_potential_task = task_graph.add_task(
                 func=mult_rasters,
                 args=(
@@ -509,7 +509,7 @@ def main():
                 target_path_list=[prod_total_potential_path],
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
                 task_name=(
-                    f'tot_prod_{nutrient_id}_10s_{landcover_short_suffix}'))
+                    f'tot_prod_{nut_id}_10s_{landcover_short_suffix}'))
             schedule_upload_blob_and_overviews(
                 task_graph, prod_total_potential_path,
                 prod_total_potential_task)
@@ -518,11 +518,11 @@ def main():
                 prod_total_potential_task)
 
             poll_dep_prod_task, poll_dep_prod_path = (
-                poll_dep_prod_nut_10s_task_path_map[nutrient_id])
+                poll_dep_prod_nut_10s_task_path_map[nut_id])
 
             prod_poll_dep_potential_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
-                f'prod_poll_dep_potential_{nutrient_id}_10s_'
+                f'prod_poll_dep_potential_{nut_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             prod_poll_dep_potential_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
@@ -533,7 +533,7 @@ def main():
                 dependent_task_list=[
                     poll_dep_prod_task, ag_task_path_tuple[0]],
                 task_name=(
-                    f'poll_dep_prod_{nutrient_id}_'
+                    f'poll_dep_prod_{nut_id}_'
                     f'10s_{landcover_short_suffix}'))
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_potential_nut_scenario_path,
@@ -547,7 +547,7 @@ def main():
             # pollination independent
             prod_poll_indep_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
-                f'prod_poll_indep_{nutrient_id}_10s_'
+                f'prod_poll_indep_{nut_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             prod_poll_indep_nut_scenario_task = task_graph.add_task(
                 func=subtract_2_rasters,
@@ -560,7 +560,7 @@ def main():
                     prod_total_potential_task,
                     prod_poll_dep_potential_nut_scenario_task],
                 task_name=(
-                    f'prod_poll_indep_{nutrient_id}_'
+                    f'prod_poll_indep_{nut_id}_'
                     f'10s_{landcover_short_suffix}'))
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_indep_nut_scenario_path,
@@ -575,7 +575,7 @@ def main():
             # pollinators due to the proximity of sufficient habitat.
             prod_poll_dep_realized_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
-                f'prod_poll_dep_realized_{nutrient_id}_10s_'
+                f'prod_poll_dep_realized_{nut_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             prod_poll_dep_realized_nut_scenario_task = task_graph.add_task(
                 func=mult_rasters,
@@ -587,7 +587,7 @@ def main():
                 dependent_task_list=[
                     poll_suff_task, prod_poll_dep_potential_nut_scenario_task],
                 task_name=(
-                    f'prod_poll_dep_realized_{nutrient_id}_'
+                    f'prod_poll_dep_realized_{nut_id}_'
                     f'10s_{landcover_short_suffix}'))
             schedule_upload_blob_and_overviews(
                 task_graph, prod_poll_dep_realized_nut_scenario_path,
@@ -599,7 +599,7 @@ def main():
                     task_graph, prod_poll_dep_realized_nut_scenario_path,
                     numpy.sum, prod_poll_dep_realized_nut_scenario_task))
             prod_poll_dep_realized_1d_task_path_map[
-                (landcover_short_suffix, nutrient_id)] = (
+                (landcover_short_suffix, nut_id)] = (
                     prod_poll_dep_realized_1d_task,
                     prod_poll_dep_realized_nut_scenario_1d_path)
             upload_blob(
@@ -607,7 +607,7 @@ def main():
                 prod_poll_dep_realized_1d_task)
             summary_raster_path_map[
                 f'''prod_poll_dep_realized_{
-                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                    nut_id}_1d_{landcover_short_suffix}'''] = (
                         prod_poll_dep_realized_nut_scenario_1d_path)
 
             # nat_cont_poll_en|va|fo|avg_10s|1d_cur|ssp1|ssp3|ssp5: "nature's
@@ -616,7 +616,7 @@ def main():
             # potential pollination-dependent production
             # (prod_poll_dep_potential)
             nat_cont_poll_nut_path = os.path.join(
-                OUTPUT_DIR, f'''nat_cont_poll_{nutrient_id}_10s_{
+                OUTPUT_DIR, f'''nat_cont_poll_{nut_id}_10s_{
                     landcover_short_suffix}.tif''')
             nat_cont_poll_nut_task = task_graph.add_task(
                 func=calculate_raster_ratio,
@@ -630,14 +630,14 @@ def main():
                     prod_poll_dep_potential_nut_scenario_task],
                 task_name=f'''nature contribution 10s {
                     os.path.basename(nat_cont_poll_nut_path)}''')
-            nat_cont_task_path_map[nutrient_id] = (
+            nat_cont_task_path_map[nut_id] = (
                 nat_cont_poll_nut_task, nat_cont_poll_nut_path)
             schedule_upload_blob_and_overviews(
                 task_graph, nat_cont_poll_nut_path,
                 nat_cont_poll_nut_task)
 
             nat_cont_poll_nut_path = os.path.join(
-                OUTPUT_DIR, f'''nat_cont_poll_{nutrient_id}_1d_{
+                OUTPUT_DIR, f'''nat_cont_poll_{nut_id}_1d_{
                     landcover_short_suffix}.tif''')
             nat_cont_poll_nut_task = task_graph.add_task(
                 func=calculate_raster_ratio,
@@ -656,14 +656,14 @@ def main():
                 nat_cont_poll_nut_task)
             summary_raster_path_map[
                 f'''nat_cont_poll_{
-                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                    nut_id}_1d_{landcover_short_suffix}'''] = (
                         nat_cont_poll_nut_path)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
             prod_poll_dep_unrealized_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
-                f'prod_poll_dep_unrealized_{nutrient_id}_10s_'
+                f'prod_poll_dep_unrealized_{nut_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             prod_poll_dep_unrealized_nut_scenario_task = task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
@@ -692,14 +692,14 @@ def main():
                     numpy.sum, prod_poll_dep_unrealized_nut_scenario_task))
             summary_raster_path_map[
                 f'''prod_poll_dep_unrealized_{
-                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                    nut_id}_1d_{landcover_short_suffix}'''] = (
                         prod_poll_dep_unrealized_nut_scenario_1d_path)
 
             # calculate prod_total_realized as
             #   prod_total_potential - prod_poll_dep_unrealized
             prod_total_realized_nut_scenario_path = os.path.join(
                 OUTPUT_DIR,
-                f'prod_total_realized_{nutrient_id}_10s_'
+                f'prod_total_realized_{nut_id}_10s_'
                 f'{landcover_short_suffix}.tif')
             prod_total_realized_nut_scenario_task = task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
@@ -728,7 +728,7 @@ def main():
                     numpy.sum, prod_total_realized_nut_scenario_task))
             summary_raster_path_map[
                 f'''prod_total_realized_{
-                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                    nut_id}_1d_{landcover_short_suffix}'''] = (
                         prod_total_realized_nut_1d_scenario_path)
 
             # poll_cont_prod_en|va|fo|10s|cur|ssp1|ssp3|ssp5: pollination's
@@ -736,7 +736,7 @@ def main():
             # pollination-dependent production (prod_poll_dep_realized) over
             # total realized production (prod_total_realized)
             poll_cont_prod_nut_path = os.path.join(
-                OUTPUT_DIR, f'''poll_cont_prod_{nutrient_id}_10s_{
+                OUTPUT_DIR, f'''poll_cont_prod_{nut_id}_10s_{
                     landcover_short_suffix}.tif''')
             poll_cont_prod_nut_task = task_graph.add_task(
                 func=calculate_raster_ratio,
@@ -750,14 +750,14 @@ def main():
                     prod_total_realized_nut_scenario_task],
                 task_name=f'''poll cont {
                     os.path.basename(poll_cont_prod_nut_path)}''')
-            poll_cont_prod_map[nutrient_id] = (
+            poll_cont_prod_map[nut_id] = (
                 poll_cont_prod_nut_task, poll_cont_prod_nut_path)
             schedule_upload_blob_and_overviews(
                 task_graph, poll_cont_prod_nut_path,
                 poll_cont_prod_nut_task)
 
             poll_cont_prod_nut_1d_path = os.path.join(
-                OUTPUT_DIR, f'''poll_cont_prod_{nutrient_id}_1d_{
+                OUTPUT_DIR, f'''poll_cont_prod_{nut_id}_1d_{
                     landcover_short_suffix}.tif''')
             poll_cont_prod_nut_task = task_graph.add_task(
                 func=calculate_raster_ratio,
@@ -771,14 +771,14 @@ def main():
                     prod_total_realized_nut_1d_scenario_task],
                 task_name=f'''poll cont {
                     os.path.basename(poll_cont_prod_nut_1d_path)}''')
-            poll_cont_1d_prod_map[nutrient_id] = (
+            poll_cont_1d_prod_map[nut_id] = (
                 poll_cont_prod_nut_task, poll_cont_prod_nut_1d_path)
             schedule_upload_blob_and_overviews(
                 task_graph, poll_cont_prod_nut_1d_path,
                 poll_cont_prod_nut_task)
             summary_raster_path_map[
                 f'''poll_cont_prod_{
-                    nutrient_id}_1d_{landcover_short_suffix}'''] = (
+                    nut_id}_1d_{landcover_short_suffix}'''] = (
                         poll_cont_prod_nut_1d_path)
 
         poll_cont_prod_avg_path = os.path.join(
@@ -1092,7 +1092,7 @@ def main():
         tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
             task_graph, nut_requirements_path,
             numpy.sum, nut_requirements_task)
-        summary_raster_path_map[f'''nut_req_{nutrient_id}_1d_cur'''] = (
+        summary_raster_path_map[f'''nut_req_{nut_id}_1d_cur'''] = (
             tot_nut_deg_path)
 
         # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
@@ -1116,7 +1116,7 @@ def main():
         prod_poll_dep_1d_task_path_map[('cur', nut_id)] = (
             poll_cont_nut_task, poll_cont_nut_req_path)
         summary_raster_path_map[
-            f'''poll_cont_nut_req_{nutrient_id}_1d_cur'''] = (
+            f'''poll_cont_nut_req_{nut_id}_1d_cur'''] = (
                 poll_cont_nut_req_path)
 
         # calculate ssp needs
@@ -1145,7 +1145,7 @@ def main():
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
             summary_raster_path_map[
-                f'''nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = (
+                f'''nut_req_{nut_id}_1d_ssp{ssp_id}'''] = (
                     tot_nut_deg_path)
 
             # poll_cont_nut_req_en|va|fo_1d_cur|ssp1|ssp3|ssp5: "nature's
@@ -1170,7 +1170,7 @@ def main():
             prod_poll_dep_1d_task_path_map[(f'ssp{ssp_id}', nut_id)] = (
                 poll_cont_nut_task, poll_cont_nut_req_path)
             summary_raster_path_map[
-                f'''poll_cont_nut_req_{nutrient_id}_1d_ssp{ssp_id}'''] = (
+                f'''poll_cont_nut_req_{nut_id}_1d_ssp{ssp_id}'''] = (
                     poll_cont_nut_req_path)
 
     for scenario_id in ('cur', 'ssp1', 'ssp3', 'ssp5'):
@@ -1197,8 +1197,8 @@ def main():
     task_graph.join()
 
     countries_myregions_df = pandas.read_csv(
-        'countries_myregions_final_md5_bee74896fa41d0deb2161c65e2d97a32.csv',
-        usecols=['Country', 'myregions'], sep=';')
+        'countries_myregions_final_md5_7e35a0775335f9aaf9a28adbac0b8895.csv',
+        usecols=['country', 'myregions'], sep=';')
     country_to_region_dict = {
         row[1][1]: row[1][0] for row in countries_myregions_df.iterrows()}
 

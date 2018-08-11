@@ -1179,7 +1179,7 @@ def main():
         # nutrients, with each nutrient capped at 1
         poll_cont_nut_req_avg_1d_path = os.path.join(
             OUTPUT_DIR, f'poll_cont_nut_req_avg_1d_{scenario_id}.tif')
-        task_graph.add_task(
+        average_raster_task = task_graph.add_task(
             func=average_rasters,
             args=tuple(
                 [prod_poll_dep_1d_task_path_map[(scenario_id, nut_id)][1]
@@ -1192,6 +1192,11 @@ def main():
                 for nut_id in ('en', 'fo', 'va')],
             task_name=f'''poll cont nut avg 1d {
                 os.path.basename(poll_cont_nut_req_avg_1d_path)}''')
+        upload_blob(
+            task_graph, poll_cont_nut_req_avg_1d_path, average_raster_task)
+        summary_raster_path_map[
+            f'''poll_cont_nut_req_avg_1d_{nut_id}_1d_{scenario_id}'''] = (
+                poll_cont_nut_req_avg_1d_path)
 
     task_graph.close()
     task_graph.join()
@@ -1571,7 +1576,8 @@ def subtract_3_rasters(
         sub_op, target_path, gdal.GDT_Float32, target_nodata)
 
 
-def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
+def calculate_raster_ratio(
+        raster_a_path, raster_b_path, target_raster_path, clamp_to=None):
     """Calculate the ratio of a:b and ignore nodata and divide by 0.
 
     Parameters:
@@ -1579,6 +1585,7 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
         raster_b_path (string): path to denominator of ratio
         target_raster_path (string): path to desired target raster that will
             use a nodata value of -1.
+        clamp_to (numeric): if not None, the ratio is capped to this value.
 
     Returns:
         None.
@@ -1611,6 +1618,8 @@ def calculate_raster_ratio(raster_a_path, raster_b_path, target_raster_path):
             ~numpy.isclose(array_b, nodata_b) &
             ~zero_mask)
         result[valid_mask] = array_a[valid_mask] / array_b[valid_mask]
+        if clamp_to:
+            result[valid_mask & (result > clamp_to)] = clamp_to
         result[zero_mask] = 0.0
         return result
 

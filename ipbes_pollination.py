@@ -87,6 +87,11 @@ BLOB_ROOT = f'''ipbes_pollination_result'''
 
 def main():
     """Entry point."""
+    try:
+        os.makedirs(WORKING_DIR)
+    except OSError:
+        pass
+
     task_graph = taskgraph.TaskGraph(
         CHURN_DIR, N_WORKERS, delayed_start=DELAYED_START,
         reporting_interval=5.0)

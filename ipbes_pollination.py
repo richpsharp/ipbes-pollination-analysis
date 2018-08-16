@@ -1059,14 +1059,20 @@ def main():
     # this table comes from section "1.4.3 Dietary requirements"
     # units are 'va': Vitamin A (mcg RE)
     # 'fo': folate (mcg DFE)
-    # 'en': Energy (kcal)
+    # 'en': Energy (kcal) but converted to annual needs
     nutritional_needs_map = {
-        'gpw_v4_e_a000_014ft_2010_count': {'va': 450, 'fo': 250, 'en': 1531},
-        'gpw_v4_e_a000_014mt_2010_count': {'va': 483, 'fo': 250, 'en': 1648},
-        'gpw_v4_e_a015_065ft_2010_count': {'va': 516, 'fo': 408, 'en': 2153},
-        'gpw_v4_e_a015_065mt_2010_count': {'va': 600, 'fo': 400, 'en': 2675},
-        'gpw_v4_e_a065plusft_2010_count': {'va': 500, 'fo': 400, 'en': 1876},
-        'gpw_v4_e_a065plusmt_2010_count': {'va': 600, 'fo': 400, 'en': 2318},
+        'gpw_v4_e_a000_014ft_2010_count': {
+            'va': 450*365.25, 'fo': 250*365.25, 'en': 1531*365.25},
+        'gpw_v4_e_a000_014mt_2010_count': {
+            'va': 483*365.25, 'fo': 250*365.25, 'en': 1648*365.25},
+        'gpw_v4_e_a015_065ft_2010_count': {
+            'va': 516*365.25, 'fo': 408*365.25, 'en': 2153*365.25},
+        'gpw_v4_e_a015_065mt_2010_count': {
+            'va': 600*365.25, 'fo': 400*365.25, 'en': 2675*365.25},
+        'gpw_v4_e_a065plusft_2010_count': {
+            'va': 500*365.25, 'fo': 400*365.25, 'en': 1876*365.25},
+        'gpw_v4_e_a065plusmt_2010_count': {
+            'va': 600*365.25, 'fo': 400*365.25, 'en': 2318*365.25},
     }
 
     prod_poll_dep_1d_task_path_map = {}

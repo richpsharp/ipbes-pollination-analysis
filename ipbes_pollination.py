@@ -414,6 +414,16 @@ def main():
             elif mask_prefix == 'ag':
                 ag_task_path_tuple = (mask_task, mask_target_path)
 
+        one_degree_task, mask_count_nonzero_1d_path = (
+            schedule_aggregate_to_degree(
+                task_graph, ag_task_path_tuple[1], numpy.count_nonzero,
+                ag_task_path_tuple[0],
+                target_raster_path_name=os.path.join(
+                    OUTPUT_DIR,
+                    f'''{landcover_key}_ag_mask_count_nonzero_1d.tif''')))
+        upload_blob(
+            task_graph, mask_count_nonzero_1d_path, one_degree_task)
+
         pollhab_2km_prop_path = os.path.join(
             CHURN_DIR, 'pollhab_2km_prop',
             f'pollhab_2km_prop_{landcover_key}.tif')
@@ -473,7 +483,7 @@ def main():
         threshold_val = 0.3
         pollinator_suff_hab_path = os.path.join(
             CHURN_DIR, 'poll_suff_hab_ag_coverage_rasters',
-            f'poll_suff_ag_coverage_mask_10s_{landcover_short_suffix}.tif')
+            f'poll_suff_ag_coverage_prop_10s_{landcover_short_suffix}.tif')
         poll_suff_task = task_graph.add_task(
             func=threshold_select_raster,
             args=(
@@ -483,15 +493,32 @@ def main():
             target_path_list=[pollinator_suff_hab_path],
             dependent_task_list=[
                 pollhab_2km_prop_task, ag_task_path_tuple[0]],
-            task_name=f"""poll_suff_ag_coverage_mask {
+            task_name=f"""poll_suff_ag_coverage_prop {
                 os.path.basename(pollinator_suff_hab_path)}""")
         schedule_upload_blob_and_overviews(
             task_graph, pollinator_suff_hab_path, poll_suff_task)
-        one_degree_task, poll_suff_hab_ag_avg_path = (
+        # avg
+        one_degree_task, poll_suff_ag_coverage_sum_1d_path = (
             schedule_aggregate_to_degree(
-                task_graph, pollinator_suff_hab_path, numpy.average,
-                poll_suff_task))
-        upload_blob(task_graph, poll_suff_hab_ag_avg_path, one_degree_task)
+                task_graph, pollinator_suff_hab_path, numpy.sum,
+                poll_suff_task,
+                target_raster_path_name=os.path.join(
+                    OUTPUT_DIR, f'''poll_suff_ag_coverage_prop_sum_1d_{
+                        landcover_short_suffix}''')))
+        upload_blob(
+            task_graph, poll_suff_ag_coverage_sum_1d_path, one_degree_task)
+
+        one_degree_task, poll_suff_ag_coverage_count_nonzero_1d_path = (
+            schedule_aggregate_to_degree(
+                task_graph, pollinator_suff_hab_path, numpy.count_nonzero,
+                poll_suff_task,
+                target_raster_path_name=os.path.join(
+                    OUTPUT_DIR,
+                    f'''poll_suff_ag_coverage_prop_count_nonzero_1d_{
+                        landcover_short_suffix}''')))
+        upload_blob(
+            task_graph, poll_suff_ag_coverage_count_nonzero_1d_path,
+            one_degree_task)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),
@@ -2296,10 +2323,15 @@ def schedule_sum_and_aggregate(
 
 
 def schedule_aggregate_to_degree(
-        task_graph, base_raster_path, aggregate_func, base_raster_task):
+        task_graph, base_raster_path, aggregate_func, base_raster_task,
+        target_raster_path_name=None):
     """Schedule an aggregate and upload of 1D approximation."""
-    one_degree_raster_path = (
-        base_raster_path.replace('_10s_', '_1d_').replace('_30s_', '_1d_'))
+    if not target_raster_path_name:
+        one_degree_raster_path = (
+            base_raster_path.replace('_10s_', '_1d_').replace(
+                '_30s_', '_1d_'))
+    else:
+        one_degree_raster_path = target_raster_path_name
     one_degree_task = task_graph.add_task(
         func=aggregate_to_degree,
         args=(base_raster_path, aggregate_func, one_degree_raster_path),

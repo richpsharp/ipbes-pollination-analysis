@@ -423,6 +423,9 @@ def main():
                     f'''{landcover_key}_ag_mask_count_nonzero_1d.tif''')))
         upload_blob(
             task_graph, mask_count_nonzero_1d_path, one_degree_task)
+        summary_raster_path_map[f'''{
+            landcover_key}_ag_mask_count_nonzero_1d'''] = (
+                mask_count_nonzero_1d_path)
 
         pollhab_2km_prop_path = os.path.join(
             CHURN_DIR, 'pollhab_2km_prop',
@@ -507,6 +510,8 @@ def main():
                         landcover_short_suffix}''')))
         upload_blob(
             task_graph, poll_suff_ag_coverage_sum_1d_path, one_degree_task)
+        summary_raster_path_map[f'''poll_suff_ag_coverage_prop_sum_1d_{
+            landcover_short_suffix}'''] = poll_suff_ag_coverage_sum_1d_path
 
         one_degree_task, poll_suff_ag_coverage_count_nonzero_1d_path = (
             schedule_aggregate_to_degree(
@@ -519,6 +524,10 @@ def main():
         upload_blob(
             task_graph, poll_suff_ag_coverage_count_nonzero_1d_path,
             one_degree_task)
+        summary_raster_path_map[
+            f'''poll_suff_ag_coverage_prop_count_nonzero_1d_{
+                landcover_short_suffix}'''] = (
+                    poll_suff_ag_coverage_count_nonzero_1d_path)
 
         # tot_prod_en|va|fo_10s|1d_cur|ssp1|ssp3|ssp5
         # total annual production of energy (KJ/yr), vitamin A (IU/yr),

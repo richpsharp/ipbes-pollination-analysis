@@ -507,7 +507,7 @@ def main():
                 poll_suff_task,
                 target_raster_path_name=os.path.join(
                     OUTPUT_DIR, f'''poll_suff_ag_coverage_prop_sum_1d_{
-                        landcover_short_suffix}''')))
+                        landcover_short_suffix}.tif''')))
         upload_blob(
             task_graph, poll_suff_ag_coverage_sum_1d_path, one_degree_task)
         summary_raster_path_map[f'''poll_suff_ag_coverage_prop_sum_1d_{
@@ -520,12 +520,28 @@ def main():
                 target_raster_path_name=os.path.join(
                     OUTPUT_DIR,
                     f'''poll_suff_ag_coverage_prop_count_nonzero_1d_{
-                        landcover_short_suffix}''')))
+                        landcover_short_suffix}.tif''')))
         upload_blob(
             task_graph, poll_suff_ag_coverage_count_nonzero_1d_path,
             one_degree_task)
         summary_raster_path_map[
             f'''poll_suff_ag_coverage_prop_count_nonzero_1d_{
+                landcover_short_suffix}'''] = (
+                    poll_suff_ag_coverage_count_nonzero_1d_path)
+
+        one_degree_task, poll_suff_ag_coverage_count_nonzero_1d_path = (
+            schedule_aggregate_to_degree(
+                task_graph, pollinator_suff_hab_path, count_ge_one,
+                poll_suff_task,
+                target_raster_path_name=os.path.join(
+                    OUTPUT_DIR,
+                    f'''poll_suff_ag_coverage_prop_count_eq1_1d_{
+                        landcover_short_suffix}.tif''')))
+        upload_blob(
+            task_graph, poll_suff_ag_coverage_count_nonzero_1d_path,
+            one_degree_task)
+        summary_raster_path_map[
+            f'''poll_suff_ag_coverage_prop_count_eq1_1d_{
                 landcover_short_suffix}'''] = (
                     poll_suff_ag_coverage_count_nonzero_1d_path)
 
@@ -1295,7 +1311,8 @@ def main():
         band = raster.GetRasterBand(1)
         x_size = band.XSize
         y_size = band.YSize
-        array_feature_id_map[field_name] = band.ReadAsArray()
+        array_feature_id_map[field_name] = (
+            band.ReadAsArray(), band.GetNoDataValue())
         gt = raster.GetGeoTransform()
         band = None
         raster = None
@@ -1353,9 +1370,12 @@ def main():
         y_coord = int((lat_coord - gt[3]) / gt[5])
         if not 0 <= y_coord < y_size:
             continue
-        for field_name, raster_array in array_feature_id_map.items():
+        for field_name, (raster_array, raster_nodata) in (
+                array_feature_id_map.items()):
             pixel_value = raster_array[y_coord, x_coord]
-            grid_feature.SetField(field_name, float(pixel_value))
+            if raster_nodata is not None and ~numpy.isclose(
+                    pixel_value, raster_nodata):
+                grid_feature.SetField(field_name, float(pixel_value))
         target_summary_grid_layer.SetFeature(grid_feature)
 
     blob_path = os.path.join(
@@ -1948,7 +1968,7 @@ def threshold_select_raster(
     """
     base_nodata = pygeoprocessing.get_raster_info(
         base_raster_path)['nodata'][0]
-    target_nodata = 2
+    target_nodata = -9999.
 
     def threshold_select_op(
             base_array, select_array, threshold_val, base_nodata,
@@ -2418,6 +2438,10 @@ def aggregate_to_degree(raster_path, aggregate_func, target_path):
                     "%.2f%% complete", 100.0 * float(row_index+1) / n_rows)
                 last_time = current_time
     LOGGER.info("100%% complete")
+
+
+def count_ge_one(x):
+    return numpy.count_nonzero(x >= 1)
 
 
 if __name__ == '__main__':

@@ -242,6 +242,7 @@ def main():
             'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
             '/Globio4_landuse_10sec_1900_md5_'
             'f5db818a5b16799bf2cb627e574120a4.tif', '1900'),
+        'ESACCI_LC_L4_LCSS': ('https://storage.cloud.google.com/ipbes-ndr-ecoshard-data/ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_md5_1254d25f937e6d9bdee5779d377c5aa4.tif', 'ESACCI_LC_L4_LCSS')
         }
 
     # 1.2.3.  Crop production

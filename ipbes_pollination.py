@@ -2354,7 +2354,7 @@ def schedule_sum_and_aggregate(
         [pygeoprocessing.get_raster_info(path)['raster_size']
          for path in base_raster_path_list])
 
-    dependent_task_list = list(base_raster_path_list)
+    dependent_task_list = list(base_raster_task_list)
     if len(raster_size_set) > 1:
         aligned_path_list = [
             target_10s_path + os.path.basename(path) + '_aligned.tif'

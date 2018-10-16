@@ -2307,8 +2307,23 @@ def _mult_raster_op(array_a, array_b, nodata_a, nodata_b, target_nodata):
 
 def mult_rasters(raster_a_path, raster_b_path, target_path):
     """Multiply a by b and skip nodata."""
-    nodata_a = pygeoprocessing.get_raster_info(raster_a_path)['nodata'][0]
-    nodata_b = pygeoprocessing.get_raster_info(raster_b_path)['nodata'][0]
+    raster_info_a = pygeoprocessing.get_raster_info(raster_a_path)
+    raster_info_b = pygeoprocessing.get_raster_info(raster_b_path)
+
+    nodata_a = raster_info_a['nodata'][0]
+    nodata_b = raster_info_b['nodata'][0]
+
+    if raster_info_a['raster_size'] != raster_info_b['raster_size']:
+        aligned_raster_a_path = (
+            target_path + os.path.basename(raster_a_path) + '_aligned.tif')
+        aligned_raster_b_path = (
+            target_path + os.path.basename(raster_b_path) + '_aligned.tif')
+        pygeoprocessing.align_and_resize_raster_stack(
+            [raster_a_path, raster_b_path],
+            [aligned_raster_a_path, aligned_raster_b_path],
+            ['near'] * 2, raster_info_a['pixel_size'], 'intersection')
+        raster_a_path = aligned_raster_a_path
+        raster_b_path = aligned_raster_b_path
 
     pygeoprocessing.raster_calculator(
         [(raster_a_path, 1), (raster_b_path, 1), (nodata_a, 'raw'),
@@ -2335,6 +2350,28 @@ def schedule_sum_and_aggregate(
     """Sum all rasters in `base_raster_path` and aggregate to degree."""
     path_list = [(path, 1) for path in base_raster_path_list]
 
+    raster_size_set = set(
+        [pygeoprocessing.get_raster_info(path)['raster_size']
+         for path in base_raster_path_list])
+
+    dependent_task_list = list(base_raster_path_list)
+    if len(raster_size_set) > 1:
+        aligned_path_list = [
+            target_10s_path + os.path.basename(path) + '_aligned.tif'
+            for path in base_raster_path_list]
+        align_task = task_graph.add_task(
+            func=pygeoprocessing.align_and_resize_raster_stack,
+            args=(
+                base_raster_path_list,
+                aligned_path_list,
+                ['near'] * len(base_raster_path_list),
+                pygeoprocessing.get_raster_info(
+                    base_raster_task_list[0])['pixel_size'], 'intersection'),
+            target_path_list=aligned_path_list,
+            task_name='align base rasters for %s' % os.path.basename(
+                target_10s_path))
+        dependent_task_list.append(align_task)
+        path_list = [(path, 1) for path in aligned_path_list]
     target_nodata = -9999.
 
     add_raster_task = task_graph.add_task(
@@ -2343,7 +2380,7 @@ def schedule_sum_and_aggregate(
             [(target_nodata, 'raw')] + path_list, add_op, target_10s_path,
             gdal.GDT_Float32, target_nodata),
         target_path_list=[target_10s_path],
-        dependent_task_list=base_raster_task_list,
+        dependent_task_list=dependent_task_list,
         task_name=f'add rasters {os.path.basename(target_10s_path)}')
 
     return schedule_aggregate_to_degree(

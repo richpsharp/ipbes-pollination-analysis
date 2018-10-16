@@ -79,7 +79,6 @@ UPLOAD_RESULTS = len(sys.argv) == 3 and 'upload' == sys.argv[2]
 
 NODATA = -9999
 N_WORKERS = max(1, multiprocessing.cpu_count())
-DELAYED_START = N_WORKERS >= 0
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 BLOB_ROOT = f'''ipbes_pollination_result'''
@@ -93,8 +92,7 @@ def main():
         pass
 
     task_graph = taskgraph.TaskGraph(
-        CHURN_DIR, N_WORKERS, delayed_start=DELAYED_START,
-        reporting_interval=5.0)
+        CHURN_DIR, N_WORKERS, reporting_interval=5.0)
 
     summary_raster_path_map = {}
 

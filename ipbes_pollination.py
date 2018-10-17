@@ -63,7 +63,7 @@ _MULT_NODATA = -1
 # natural habitats, but this did not substantially alter the results  so we do
 # not include it in our final analysis or code base.
 
-GLOBIO_AG_CODES = [2, (230, 232)]
+GLOBIO_AG_CODES = [2, (10, 40), (230, 232)]
 GLOBIO_NATURAL_CODES = [6, (50, 180)]
 
 WORKING_DIR = '../ipbes_pollination_bucket/ipbes_pollination_workspace'

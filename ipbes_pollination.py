@@ -1311,15 +1311,10 @@ def main():
         x_size = band.XSize
         y_size = band.YSize
         array_feature_id_map[field_name] = (
-            band.ReadAsArray(), band.GetNoDataValue())
-        gt = raster.GetGeoTransform()
+            band.ReadAsArray(), band.GetNoDataValue(),
+            raster.GetGeoTransform())
         band = None
         raster = None
-
-    sample_raster_path = next(iter(summary_raster_path_map.values()))
-    sample_raster = gdal.OpenEx(sample_raster_path, gdal.OF_RASTER)
-    gt = sample_raster.GetGeoTransform()
-    sample_raster = None
 
     # process one grid at a time
     last_time = time.time()
@@ -1363,14 +1358,14 @@ def main():
         long_coord = centroid.GetX()
         lat_coord = centroid.GetY()
 
-        x_coord = int((long_coord - gt[0]) / gt[1])
-        if not 0 <= x_coord < x_size:
-            continue
-        y_coord = int((lat_coord - gt[3]) / gt[5])
-        if not 0 <= y_coord < y_size:
-            continue
-        for field_name, (raster_array, raster_nodata) in (
+        for field_name, (raster_array, raster_nodata, gt) in (
                 array_feature_id_map.items()):
+            x_coord = int((long_coord - gt[0]) / gt[1])
+            if not 0 <= x_coord < x_size:
+                continue
+            y_coord = int((lat_coord - gt[3]) / gt[5])
+            if not 0 <= y_coord < y_size:
+                continue
             pixel_value = raster_array[y_coord, x_coord]
             if raster_nodata is not None and ~numpy.isclose(
                     pixel_value, raster_nodata):

@@ -977,7 +977,9 @@ def main():
         schedule_upload_blob_and_overviews(
             task_graph, gpw_count_path, gpw_count_task)
 
-    # TODO: calculate "cur" GPW at degree scale here
+    # we can't schedule a sum until we have the data, so we join here
+    gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][1].join()
+    gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][1].join()
     gpw_1d_path_map = {}
     total_cur_pop_10s_path = os.path.join(
         OUTPUT_DIR, 'gpw_v4_e_atot_pop_10s_cur.tif')
@@ -2377,23 +2379,28 @@ def schedule_sum_and_aggregate(
     """Sum all rasters in `base_raster_path` and aggregate to degree."""
     path_list = [(path, 1) for path in base_raster_path_list]
 
+    raster_size_set = set(
+        [pygeoprocessing.get_raster_info(path)['raster_size']
+         for path in base_raster_path_list])
+
     dependent_task_list = list(base_raster_task_list)
-    aligned_path_list = [
-        target_10s_path + os.path.basename(path) + '_aligned.tif'
-        for path in base_raster_path_list]
-    align_task = task_graph.add_task(
-        func=pygeoprocessing.align_and_resize_raster_stack,
-        args=(
-            base_raster_path_list,
-            aligned_path_list,
-            ['near'] * len(base_raster_path_list),
-            pygeoprocessing.get_raster_info(
-                base_raster_task_list[0])['pixel_size'], 'intersection'),
-        target_path_list=aligned_path_list,
-        task_name='align base rasters for %s' % os.path.basename(
-            target_10s_path))
-    dependent_task_list.append(align_task)
-    path_list = [(path, 1) for path in aligned_path_list]
+    if len(raster_size_set) > 1:
+        aligned_path_list = [
+            target_10s_path + os.path.basename(path) + '_aligned.tif'
+            for path in base_raster_path_list]
+        align_task = task_graph.add_task(
+            func=pygeoprocessing.align_and_resize_raster_stack,
+            args=(
+                base_raster_path_list,
+                aligned_path_list,
+                ['near'] * len(base_raster_path_list),
+                pygeoprocessing.get_raster_info(
+                    base_raster_task_list[0])['pixel_size'], 'intersection'),
+            target_path_list=aligned_path_list,
+            task_name='align base rasters for %s' % os.path.basename(
+                target_10s_path))
+        dependent_task_list.append(align_task)
+        path_list = [(path, 1) for path in aligned_path_list]
     target_nodata = -9999.
 
     add_raster_task = task_graph.add_task(

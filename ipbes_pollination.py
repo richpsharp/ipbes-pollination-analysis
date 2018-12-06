@@ -1113,9 +1113,10 @@ def main():
     # 'en': Energy (kcal) but converted to annual needs
 
     nutrient_requirements_url = (
-        'https://storage.cloud.google.com/ecoshard-root/ipbes/Dietary%20requ'
-        'irements%20RNI%20EAR_annua_CORRECTUNITS_md5_27470a02d1fc827704a1cb4'
-        'ccc765d78.csv')
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/'
+        'ipbes_dietary_requirements_RNI_EAR_annual_'
+        'md5_27470a02d1fc827704a1cb4ccc765d78.csv')
+
     nutrient_requirements_table_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(nutrient_requirements_url))
 

@@ -1111,6 +1111,38 @@ def main():
     # units are 'va': Vitamin A (mcg RE)
     # 'fo': folate (mcg DFE)
     # 'en': Energy (kcal) but converted to annual needs
+
+    nutrient_requirements_url = (
+        'https://storage.cloud.google.com/ecoshard-root/ipbes/Dietary%20requ'
+        'irements%20RNI%20EAR_annua_CORRECTUNITS_md5_27470a02d1fc827704a1cb4'
+        'ccc765d78.csv')
+    nutrient_requirements_table_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(nutrient_requirements_url))
+
+    nutrient_requirements_table_fetch_task = task_graph.add_task(
+        func=google_bucket_fetch_and_validate,
+        args=(
+            nutrient_requirements_url, GOOGLE_BUCKET_KEY_PATH,
+            nutrient_requirements_table_path),
+        target_path_list=[nutrient_requirements_table_path],
+        task_name=f'''fetch {os.path.basename(
+            nutrient_requirements_table_path)}''')
+    nutrient_requirements_table_fetch_task.join()
+    nutritional_needs_df = pandas.read_csv(nutrient_requirements_table_path)
+    # this dataframe has ages that need to be converted to the pop counts
+
+    nutritional_needs_map = {}
+    for age_index, pop_raster_id in (
+            ('0-14 F', 'gpw_v4_e_a000_014ft_2010_count')
+            ('0-14 M', 'gpw_v4_e_a000_014mt_2010_count')
+            ('15-64 F', 'gpw_v4_e_a015_065ft_2010_count')
+            ('15-64 M', 'gpw_v4_e_a015_065mt_2010_count')
+            ('65+ F', 'gpw_v4_e_a065plusft_2010_count')
+            ('65+ M', 'gpw_v4_e_a065plusmt_2010_count')):
+        nutritional_needs_map[pop_raster_id] =
+        pass
+
+
     nutritional_needs_map = {
         'gpw_v4_e_a000_014ft_2010_count': {
             'va': 450*365.25, 'fo': 250*365.25, 'en': 1531*365.25},

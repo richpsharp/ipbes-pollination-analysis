@@ -1139,24 +1139,13 @@ def main():
             ('15-64 M', 'gpw_v4_e_a015_065mt_2010_count')
             ('65+ F', 'gpw_v4_e_a065plusft_2010_count')
             ('65+ M', 'gpw_v4_e_a065plusmt_2010_count')):
-        nutritional_needs_map[pop_raster_id] =
-        pass
-
-
-    nutritional_needs_map = {
-        'gpw_v4_e_a000_014ft_2010_count': {
-            'va': 450*365.25, 'fo': 250*365.25, 'en': 1531*365.25},
-        'gpw_v4_e_a000_014mt_2010_count': {
-            'va': 483*365.25, 'fo': 250*365.25, 'en': 1648*365.25},
-        'gpw_v4_e_a015_065ft_2010_count': {
-            'va': 516*365.25, 'fo': 408*365.25, 'en': 2153*365.25},
-        'gpw_v4_e_a015_065mt_2010_count': {
-            'va': 600*365.25, 'fo': 400*365.25, 'en': 2675*365.25},
-        'gpw_v4_e_a065plusft_2010_count': {
-            'va': 500*365.25, 'fo': 400*365.25, 'en': 1876*365.25},
-        'gpw_v4_e_a065plusmt_2010_count': {
-            'va': 600*365.25, 'fo': 400*365.25, 'en': 2318*365.25},
-    }
+        gender_row = nutritional_needs_df[
+            nutritional_needs_df['age_gender'] == age_index]
+        nutritional_needs_map[pop_raster_id] = {
+            'va': gender_row['va'][0]
+            'fo': gender_row['fo'][0]
+            'en': gender_row['en'][0]
+        }
 
     prod_poll_dep_1d_task_path_map = {}
     for nut_id in ('en', 'va', 'fo'):

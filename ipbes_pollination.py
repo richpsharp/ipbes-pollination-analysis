@@ -1141,8 +1141,8 @@ def main():
         gender_row = nutritional_needs_df[
             nutritional_needs_df['age_gender'] == age_index]
         nutritional_needs_map[pop_raster_id] = {
-            'va': gender_row['va'][0]
-            'fo': gender_row['fo'][0]
+            'va': gender_row['va'][0],
+            'fo': gender_row['fo'][0],
             'en': gender_row['en'][0]
         }
 

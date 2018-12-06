@@ -1130,7 +1130,6 @@ def main():
     nutrient_requirements_table_fetch_task.join()
     nutritional_needs_df = pandas.read_csv(nutrient_requirements_table_path)
     # this dataframe has ages that need to be converted to the pop counts
-
     nutritional_needs_map = {}
     for age_index, pop_raster_id in (
             ('0-14 F', 'gpw_v4_e_a000_014ft_2010_count')

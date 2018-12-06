@@ -1800,7 +1800,7 @@ def calc_pop_count(gpw_dens_path, gpw_count_path):
 
     nodata = gpw_dens_info['nodata'][0]
     try:
-        os.makedirs(os.dirname(gpw_count_path))
+        os.makedirs(os.path.dirname(gpw_count_path))
     except OSError:
         pass
     pygeoprocessing.raster_calculator(
@@ -2233,7 +2233,7 @@ def create_prod_nutrient_raster(
             target_10km_yield_path, target_10s_yield_path,
             target_10s_production_path]:
         try:
-            os.makedirs(os.dirname(path))
+            os.makedirs(os.path.dirname(path))
         except OSError:
             pass
     crop_nutrient_df = pandas.read_csv(crop_nutrient_df_path)

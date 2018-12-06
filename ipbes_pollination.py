@@ -978,8 +978,8 @@ def main():
             task_graph, gpw_count_path, gpw_count_task)
 
     # we can't schedule a sum until we have the data, so we join here
-    gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][1].join()
-    gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][1].join()
+    gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][0].join()
+    gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][0].join()
     gpw_1d_path_map = {}
     total_cur_pop_10s_path = os.path.join(
         OUTPUT_DIR, 'gpw_v4_e_atot_pop_10s_cur.tif')

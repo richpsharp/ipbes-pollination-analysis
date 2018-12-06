@@ -66,7 +66,7 @@ _MULT_NODATA = -1
 GLOBIO_AG_CODES = [2, (10, 40), (230, 232)]
 GLOBIO_NATURAL_CODES = [6, (50, 180)]
 
-WORKING_DIR = '../ipbes_pollination_bucket/ipbes_pollination_workspace'
+WORKING_DIR = './ipbes_pollination_workspace'
 OUTPUT_DIR = os.path.join(WORKING_DIR, 'outputs')
 ECOSHARD_DIR = os.path.join(WORKING_DIR, 'ecoshard_dir')
 CHURN_DIR = os.path.join(WORKING_DIR, 'churn')

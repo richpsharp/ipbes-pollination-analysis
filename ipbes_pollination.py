@@ -2379,6 +2379,10 @@ def schedule_sum_and_aggregate(
     """Sum all rasters in `base_raster_path` and aggregate to degree."""
     path_list = [(path, 1) for path in base_raster_path_list]
 
+    # this is the only way to get around that we need to check raster size
+    for task in base_raster_task_list:
+        task.join()
+
     raster_size_set = set(
         [pygeoprocessing.get_raster_info(path)['raster_size']
          for path in base_raster_path_list])

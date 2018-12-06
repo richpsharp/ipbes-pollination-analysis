@@ -1133,11 +1133,11 @@ def main():
     # this dataframe has ages that need to be converted to the pop counts
     nutritional_needs_map = {}
     for age_index, pop_raster_id in (
-            ('0-14 F', 'gpw_v4_e_a000_014ft_2010_count')
-            ('0-14 M', 'gpw_v4_e_a000_014mt_2010_count')
-            ('15-64 F', 'gpw_v4_e_a015_065ft_2010_count')
-            ('15-64 M', 'gpw_v4_e_a015_065mt_2010_count')
-            ('65+ F', 'gpw_v4_e_a065plusft_2010_count')
+            ('0-14 F', 'gpw_v4_e_a000_014ft_2010_count'),
+            ('0-14 M', 'gpw_v4_e_a000_014mt_2010_count'),
+            ('15-64 F', 'gpw_v4_e_a015_065ft_2010_count'),
+            ('15-64 M', 'gpw_v4_e_a015_065mt_2010_count'),
+            ('65+ F', 'gpw_v4_e_a065plusft_2010_count'),
             ('65+ M', 'gpw_v4_e_a065plusmt_2010_count')):
         gender_row = nutritional_needs_df[
             nutritional_needs_df['age_gender'] == age_index]

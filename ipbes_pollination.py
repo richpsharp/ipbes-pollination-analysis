@@ -473,7 +473,7 @@ def main():
                 pollhab_2km_prop_task, ag_task_path_tuple[0]],
             task_name=f"""poll_suff_ag_coverage_prop {
                 os.path.basename(pollinator_suff_hab_path)}""")
-        # avg
+
         one_degree_task, poll_suff_ag_coverage_sum_1d_path = (
             schedule_aggregate_to_degree(
                 task_graph, pollinator_suff_hab_path, numpy.sum,
@@ -1838,41 +1838,6 @@ def unzip_file(zipfile_path, target_dir, touchfile_path):
 
     with open(touchfile_path, 'w') as touchfile:
         touchfile.write(f'unzipped {zipfile_path}')
-
-
-def build_overviews(local_path, resample_method):
-    """Build as many overviews as possible.
-
-    Parameters:
-        local_path (string): path to GTiff raster to build overviews on. The
-            overview will be built externally in a .ovr file in the same
-            directory.
-        resample_method (string): interpolation mode for overviews, must be
-        one of 'nearest', 'average', 'gauss', 'cubic', 'cubicspline',
-        'lanczos', 'average_mp', 'average_magphase', 'mode'.
-
-    Returns:
-        None.
-
-    """
-    min_dimension = min(
-        pygeoprocessing.get_raster_info(local_path)['raster_size'])
-    LOGGER.info(f"min min_dimension {min_dimension}")
-    raster_copy = gdal.Open(local_path)
-
-    overview_levels = []
-    current_level = 2
-    while True:
-        if min_dimension // current_level == 0:
-            break
-        overview_levels.append(current_level)
-        current_level *= 2
-    LOGGER.info(f'level list: {overview_levels}')
-    gdal.SetConfigOption('COMPRESS_OVERVIEW', 'LZW')
-    raster_copy.BuildOverviews(
-        resample_method, overview_levels, callback=_make_logger_callback(
-            f'build overview for {os.path.basename(local_path)} '
-            '%.2f%% complete'))
 
 
 def _make_logger_callback(message):

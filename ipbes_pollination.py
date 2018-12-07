@@ -641,25 +641,28 @@ def main():
                     os.path.basename(nat_cont_poll_nut_path)}''')
             nat_cont_task_path_map[nut_id] = (
                 nat_cont_poll_nut_task, nat_cont_poll_nut_path)
-            nat_cont_poll_nut_path = os.path.join(
+            nat_cont_poll_nut_1d_path = os.path.join(
                 OUTPUT_DIR, f'''nat_cont_poll_{nut_id}_1d_{
                     landcover_short_suffix}.tif''')
-            nat_cont_poll_nut_task = task_graph.add_task(
+            nat_cont_poll_nut_1d_task = task_graph.add_task(
                 func=calculate_raster_ratio,
                 args=(
                     prod_poll_dep_realized_nut_scenario_1d_path,
                     prod_poll_dep_potential_nut_scenario_1d_path,
-                    nat_cont_poll_nut_path),
-                target_path_list=[nat_cont_poll_nut_path],
+                    nat_cont_poll_nut_1d_path),
+                target_path_list=[nat_cont_poll_nut_1d_path],
                 dependent_task_list=[
                     prod_poll_dep_realized_1d_task,
                     prod_poll_dep_potential_nut_scenario_1d_task],
                 task_name=f'''nature contribution {
-                    os.path.basename(nat_cont_poll_nut_path)}''')
+                    os.path.basename(nat_cont_poll_nut_1d_path)}''')
             summary_raster_path_map[
                 f'''nat_cont_poll_{
                     nut_id}_1d_{landcover_short_suffix}'''] = (
-                        nat_cont_poll_nut_path)
+                        nat_cont_poll_nut_1d_path)
+            prod_poll_dep_realized_1d_task_path_map[
+                (landcover_short_suffix, nut_id)] = (
+                    nat_cont_poll_nut_1d_task, nat_cont_poll_nut_1d_path)
 
             # calculate prod_poll_dep_unrealized X1 as
             # prod_total - prod_poll_dep_realized
@@ -1202,6 +1205,7 @@ def main():
     # by hand.
     for _, (_, landcover_short_suffix) in landcover_data.items():
         poll_dep_task_path_list = []
+        nat_cont_poll_task_path_list = []
         for nutrient_id in ['en', 'fo', 'va']:
             poll_dep_pot_nut_path = os.path.join(
                 OUTPUT_DIR, f'''poll_dep_pot_{
@@ -1237,6 +1241,12 @@ def main():
                     nut_id}_{landcover_short_suffix}''')
             poll_dep_task_path_list.append(
                 (pol_dep_task, poll_dep_pot_nut_path))
+
+            (nat_cont_poll_task, nat_cont_poll_path) = (
+                prod_poll_dep_realized_1d_task_path_map[
+                    (landcover_short_suffix, nutrient_id)])
+            nat_cont_poll_task_path_list.append(
+                (nat_cont_poll_task, nat_cont_poll_path))
         need_path = os.path.join(
             OUTPUT_DIR, f'''need_{landcover_short_suffix}.tif''')
         task_graph.add_task(
@@ -1248,6 +1258,18 @@ def main():
             target_path_list=[need_path],
             dependent_task_list=[x[0] for x in poll_dep_task_path_list],
             task_name=f'need_{landcover_short_suffix}')
+
+        ncp_path = os.path.join(
+            OUTPUT_DIR, f'''NCP_{landcover_short_suffix}.tif''')
+        task_graph.add_task(
+            func=pygeoprocessing.raster_calculator,
+            args=(
+                [(x[1], 1) for x in nat_cont_poll_task_path_list] +
+                [(_MULT_NODATA, 1)],
+                avg_3_op, ncp_path, gdal.GDT_Float32, _MULT_NODATA),
+            target_path_list=[ncp_path],
+            dependent_task_list=[x[0] for x in nat_cont_poll_task_path_list],
+            task_name=f'ncp_{landcover_short_suffix}')
 
     task_graph.close()
     task_graph.join()

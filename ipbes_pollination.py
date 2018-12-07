@@ -2283,6 +2283,11 @@ def aggregate_to_degree(raster_path, aggregate_func, target_path):
                 LOGGER.info(
                     "%.2f%% complete", 100.0 * float(row_index+1) / n_rows)
                 last_time = current_time
+    target_band.FlushCache()
+    target_band = None
+    target_raster = None
+    base_band = None
+    base_raster = None
     LOGGER.info("100%% complete")
 
 

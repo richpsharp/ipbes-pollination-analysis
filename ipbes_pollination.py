@@ -366,6 +366,8 @@ def main():
         task_name='make convolution kernel')
 
     prod_poll_dep_realized_1d_task_path_map = {}
+    prod_poll_dep_unrealized_1d_task_path_map = {}
+    prod_total_realized_1d_task_path_map = {}
     # mask landcover into agriculture and pollinator habitat
     for landcover_key, (landcover_url, landcover_short_suffix) in (
             landcover_data.items()):
@@ -687,6 +689,11 @@ def main():
                 schedule_aggregate_to_degree(
                     task_graph, prod_poll_dep_unrealized_nut_scenario_path,
                     numpy.sum, prod_poll_dep_unrealized_nut_scenario_task))
+            prod_poll_dep_unrealized_1d_task_path_map[
+                (landcover_short_suffix, nut_id)] = (
+                    prod_poll_dep_unrealized_nut_scenario_1d_task,
+                    prod_poll_dep_unrealized_nut_scenario_1d_path)
+
             summary_raster_path_map[
                 f'''prod_poll_dep_unrealized_{
                     nut_id}_1d_{landcover_short_suffix}'''] = (
@@ -720,6 +727,10 @@ def main():
                 schedule_aggregate_to_degree(
                     task_graph, prod_total_realized_nut_scenario_path,
                     numpy.sum, prod_total_realized_nut_scenario_task))
+            prod_total_realized_1d_task_path_map[
+                (landcover_short_suffix, nut_id)] = (
+                    prod_total_realized_nut_1d_scenario_task,
+                    prod_total_realized_nut_1d_scenario_path)
             summary_raster_path_map[
                 f'''prod_total_realized_{
                     nut_id}_1d_{landcover_short_suffix}'''] = (
@@ -946,7 +957,7 @@ def main():
             gpw_15_65f_count_task, gpw_v4_e_a15_65t_2010_count_path)
 
     # we need to warp SSP rasters to match the GPW rasters
-    # we need to calcualte 15-65 pop by subtracting 0-14 and 65 plus from tot
+    # we need to calculate 15-65 pop by subtracting 0-14 and 65 plus from tot
     # then we can calculate SSP future for 0-14, 15-65, and 65 plus
     # then we can calculate nutritional needs for cur, and ssp scenarios
     ssp_task_pop_map = {}
@@ -1044,7 +1055,7 @@ def main():
             nutrient_requirements_table_path)}''')
     nutrient_requirements_table_fetch_task.join()
     nutritional_needs_df = pandas.read_csv(nutrient_requirements_table_path)
-    # this dataframe has ages that need to be converted to the pop counts
+    # this dataframe has ages that need to be converted to the pop raster ids
     nutritional_needs_map = {}
     for age_index, pop_raster_id in (
             ('0-14 F', 'gpw_v4_e_a000_014ft_2010_count'),
@@ -1186,6 +1197,42 @@ def main():
         summary_raster_path_map[
             f'''poll_cont_nut_req_avg_1d_{nut_id}_1d_{scenario_id}'''] = (
                 poll_cont_nut_req_avg_1d_path)
+
+    # The following came from SQL queries/constructions that becky used to do
+    # by hand.
+    for _, (_, landcover_short_suffix) in landcover_data.items():
+        for nutrient_id in ['en', 'fo', 'va']:
+            poll_dep_pot_nut_cur_path = os.path.join(
+                OUTPUT_DIR, f'poll_dep_pot_{nutrient_id}_cur_1d.tif')
+
+            (prod_poll_dep_realized_task, prod_poll_dep_realized_path) = (
+                prod_poll_dep_realized_1d_task_path_map[
+                    (landcover_short_suffix, nutrient_id)])
+            (prod_poll_dep_unrealized_task, prod_poll_dep_unrealized_path) = (
+                prod_poll_dep_unrealized_1d_task_path_map[
+                    (landcover_short_suffix, nutrient_id)])
+            (prod_total_realized_task, prod_total_realized_path) = (
+                prod_total_realized_1d_task_path_map[
+                    (landcover_short_suffix, nutrient_id)])
+
+            task_graph.add(
+                func=pygeoprocessing.raster_calculator,
+                args=(
+                    ((prod_poll_dep_realized_path, 1),
+                     (prod_poll_dep_unrealized_path, 1),
+                     (prod_total_realized_path, 1),
+                     (prod_poll_dep_unrealized_path, 1),
+                     (_MULT_NODATA, 'raw')),
+                    sum_num_sum_denom,
+                    poll_dep_pot_nut_cur_path,
+                    _MULT_NODATA, gdal.GDT_Float32),
+                target_path_list=[poll_dep_pot_nut_cur_path],
+                dependent_task_list=[
+                    prod_poll_dep_realized_task,
+                    prod_poll_dep_unrealized_task,
+                    prod_total_realized_task],
+                task_name=f'''calculate poll_dep_pot_{
+                    nut_id}_{landcover_short_suffix}''')
 
     task_graph.close()
     task_graph.join()
@@ -2236,6 +2283,22 @@ def aggregate_to_degree(raster_path, aggregate_func, target_path):
                     "%.2f%% complete", 100.0 * float(row_index+1) / n_rows)
                 last_time = current_time
     LOGGER.info("100%% complete")
+
+
+def sum_num_sum_denom(
+        num1_array, num2_array, denom1_array, denom2_array, nodata):
+    """Calculate sum of num divided by sum of denom."""
+    result = numpy.empty_like(num1_array)
+    result[:] = nodata
+    valid_mask = (
+        ~numpy.isclose(num1_array, nodata) &
+        ~numpy.isclose(num2_array, nodata) &
+        ~numpy.isclose(denom1_array, nodata) &
+        ~numpy.isclose(denom2_array, nodata))
+    result[valid_mask] = (
+        num1_array[valid_mask] + num2_array[valid_mask]) / (
+        denom1_array[valid_mask] + denom2_array[valid_mask] + 1e-9)
+    return result
 
 
 def count_ge_one(x):

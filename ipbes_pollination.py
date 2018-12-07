@@ -281,7 +281,7 @@ def main():
         task_name=f'unzip monfreda_2008_observed_yield')
 
     # fetch a landcover map to use as a base for the dimensions of the
-    # production raster, later on we'll fetch them all. TODO MOVE UP FETCH TO REPLACE THIS
+    # production raster, later on we'll fetch them all.
     landcover_key, (landcover_url, _) = next(iter(landcover_data.items()))
     landcover_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(landcover_url))
@@ -326,11 +326,6 @@ def main():
                 crop_nutrient_table_fetch_task],
             task_name=f"""create prod raster {
                 os.path.basename(prod_total_nut_10s_path)}""")
-        for upload_path in [
-                yield_total_nut_10km_path, yield_total_nut_10s_path,
-                prod_total_nut_10s_path]:
-            schedule_upload_blob_and_overviews(
-                task_graph, upload_path, prod_total_task)
         prod_total_nut_10s_task_path_map[nut_id] = (
             prod_total_task, prod_total_nut_10s_path)
 
@@ -357,11 +352,6 @@ def main():
             dependent_task_list=[landcover_fetch_task, unzip_yield_task],
             task_name=f"""create poll dep production raster {
                 os.path.basename(poll_dep_prod_nut_10s_path)}""")
-        for upload_path in [
-                poll_dep_yield_nut_10km_path, poll_dep_yield_nut_10s_path,
-                poll_dep_prod_nut_10s_path]:
-            schedule_upload_blob_and_overviews(
-                task_graph, upload_path, pol_dep_prod_task)
         poll_dep_prod_nut_10s_task_path_map[nut_id] = (
             pol_dep_prod_task, poll_dep_prod_nut_10s_path)
 
@@ -388,11 +378,9 @@ def main():
             args=(landcover_url, GOOGLE_BUCKET_KEY_PATH, landcover_path),
             target_path_list=[landcover_path],
             task_name=f'fetch {landcover_key}')
-        schedule_upload_blob_and_overviews(
-            task_graph, landcover_path, landcover_fetch_task)
 
         # This loop is so we don't duplicate code for 'ag' and 'hab' with the
-        # only difference being
+        # only difference being the lulc codes and prefix
         for mask_prefix, globio_codes in [
                 ('ag', GLOBIO_AG_CODES), ('hab', GLOBIO_NATURAL_CODES)]:
             mask_key = f'{landcover_key}_{mask_prefix}_mask'
@@ -405,8 +393,6 @@ def main():
                 target_path_list=[mask_target_path],
                 dependent_task_list=[landcover_fetch_task],
                 task_name=f'mask {mask_key}',)
-            schedule_upload_blob_and_overviews(
-                task_graph, mask_target_path, mask_task)
 
             if mask_prefix == 'hab':
                 hab_task_path_tuple = (mask_task, mask_target_path)
@@ -420,8 +406,6 @@ def main():
                 target_raster_path_name=os.path.join(
                     OUTPUT_DIR,
                     f'''{landcover_key}_ag_mask_count_nonzero_1d.tif''')))
-        upload_blob(
-            task_graph, mask_count_nonzero_1d_path, one_degree_task)
         summary_raster_path_map[f'''{
             landcover_key}_ag_mask_count_nonzero_1d'''] = (
                 mask_count_nonzero_1d_path)
@@ -447,9 +431,6 @@ def main():
             task_name=(
                 'calculate proportional'
                 f' {os.path.basename(pollhab_2km_prop_path)}'))
-        schedule_upload_blob_and_overviews(
-            task_graph, pollhab_2km_prop_path,
-            pollhab_2km_prop_task)
 
         # calculate pollhab_2km_prop_on_ag_10s by multiplying pollhab_2km_prop
         # by the ag mask
@@ -467,9 +448,6 @@ def main():
             task_name=(
                 f'''pollhab 2km prop on ag {
                     os.path.basename(pollhab_2km_prop_on_ag_path)}'''))
-        schedule_upload_blob_and_overviews(
-            task_graph, pollhab_2km_prop_on_ag_path,
-            pollhab_2km_prop_on_ag_task)
 
         #  1.1.4.  Sufficiency threshold A threshold of 0.3 was set to
         #  evaluate whether there was sufficient pollinator habitat in the 2
@@ -497,8 +475,6 @@ def main():
                 pollhab_2km_prop_task, ag_task_path_tuple[0]],
             task_name=f"""poll_suff_ag_coverage_prop {
                 os.path.basename(pollinator_suff_hab_path)}""")
-        schedule_upload_blob_and_overviews(
-            task_graph, pollinator_suff_hab_path, poll_suff_task)
         # avg
         one_degree_task, poll_suff_ag_coverage_sum_1d_path = (
             schedule_aggregate_to_degree(
@@ -507,8 +483,6 @@ def main():
                 target_raster_path_name=os.path.join(
                     OUTPUT_DIR, f'''poll_suff_ag_coverage_prop_sum_1d_{
                         landcover_short_suffix}.tif''')))
-        upload_blob(
-            task_graph, poll_suff_ag_coverage_sum_1d_path, one_degree_task)
         summary_raster_path_map[f'''poll_suff_ag_coverage_prop_sum_1d_{
             landcover_short_suffix}'''] = poll_suff_ag_coverage_sum_1d_path
 
@@ -520,9 +494,6 @@ def main():
                     OUTPUT_DIR,
                     f'''poll_suff_ag_coverage_prop_count_nonzero_1d_{
                         landcover_short_suffix}.tif''')))
-        upload_blob(
-            task_graph, poll_suff_ag_coverage_count_nonzero_1d_path,
-            one_degree_task)
         summary_raster_path_map[
             f'''poll_suff_ag_coverage_prop_count_nonzero_1d_{
                 landcover_short_suffix}'''] = (
@@ -536,9 +507,6 @@ def main():
                     OUTPUT_DIR,
                     f'''poll_suff_ag_coverage_prop_count_eq1_1d_{
                         landcover_short_suffix}.tif''')))
-        upload_blob(
-            task_graph, poll_suff_ag_coverage_count_nonzero_1d_path,
-            one_degree_task)
         summary_raster_path_map[
             f'''poll_suff_ag_coverage_prop_count_eq1_1d_{
                 landcover_short_suffix}'''] = (
@@ -566,9 +534,6 @@ def main():
                 dependent_task_list=[tot_prod_task, ag_task_path_tuple[0]],
                 task_name=(
                     f'tot_prod_{nut_id}_10s_{landcover_short_suffix}'))
-            schedule_upload_blob_and_overviews(
-                task_graph, prod_total_potential_path,
-                prod_total_potential_task)
             schedule_aggregate_to_degree(
                 task_graph, prod_total_potential_path, numpy.sum,
                 prod_total_potential_task)
@@ -591,9 +556,6 @@ def main():
                 task_name=(
                     f'poll_dep_prod_{nut_id}_'
                     f'10s_{landcover_short_suffix}'))
-            schedule_upload_blob_and_overviews(
-                task_graph, prod_poll_dep_potential_nut_scenario_path,
-                prod_poll_dep_potential_nut_scenario_task)
             (prod_poll_dep_potential_nut_scenario_1d_task,
              prod_poll_dep_potential_nut_scenario_1d_path) = (
                 schedule_aggregate_to_degree(
@@ -618,9 +580,6 @@ def main():
                 task_name=(
                     f'prod_poll_indep_{nut_id}_'
                     f'10s_{landcover_short_suffix}'))
-            schedule_upload_blob_and_overviews(
-                task_graph, prod_poll_indep_nut_scenario_path,
-                prod_poll_indep_nut_scenario_task)
             schedule_aggregate_to_degree(
                 task_graph, prod_poll_indep_nut_scenario_path,
                 numpy.sum, prod_poll_indep_nut_scenario_task)
@@ -645,9 +604,6 @@ def main():
                 task_name=(
                     f'prod_poll_dep_realized_{nut_id}_'
                     f'10s_{landcover_short_suffix}'))
-            schedule_upload_blob_and_overviews(
-                task_graph, prod_poll_dep_realized_nut_scenario_path,
-                prod_poll_dep_realized_nut_scenario_task)
 
             (prod_poll_dep_realized_1d_task,
              prod_poll_dep_realized_nut_scenario_1d_path) = (
@@ -658,9 +614,6 @@ def main():
                 (landcover_short_suffix, nut_id)] = (
                     prod_poll_dep_realized_1d_task,
                     prod_poll_dep_realized_nut_scenario_1d_path)
-            upload_blob(
-                task_graph, prod_poll_dep_realized_nut_scenario_1d_path,
-                prod_poll_dep_realized_1d_task)
             summary_raster_path_map[
                 f'''prod_poll_dep_realized_{
                     nut_id}_1d_{landcover_short_suffix}'''] = (
@@ -688,10 +641,6 @@ def main():
                     os.path.basename(nat_cont_poll_nut_path)}''')
             nat_cont_task_path_map[nut_id] = (
                 nat_cont_poll_nut_task, nat_cont_poll_nut_path)
-            schedule_upload_blob_and_overviews(
-                task_graph, nat_cont_poll_nut_path,
-                nat_cont_poll_nut_task)
-
             nat_cont_poll_nut_path = os.path.join(
                 OUTPUT_DIR, f'''nat_cont_poll_{nut_id}_1d_{
                     landcover_short_suffix}.tif''')
@@ -707,9 +656,6 @@ def main():
                     prod_poll_dep_potential_nut_scenario_1d_task],
                 task_name=f'''nature contribution {
                     os.path.basename(nat_cont_poll_nut_path)}''')
-            schedule_upload_blob_and_overviews(
-                task_graph, nat_cont_poll_nut_path,
-                nat_cont_poll_nut_task)
             summary_raster_path_map[
                 f'''nat_cont_poll_{
                     nut_id}_1d_{landcover_short_suffix}'''] = (
@@ -738,9 +684,6 @@ def main():
                 task_name=f'''prod poll dep unrealized: {
                     os.path.basename(
                         prod_poll_dep_unrealized_nut_scenario_path)}''')
-            schedule_upload_blob_and_overviews(
-                task_graph, prod_poll_dep_unrealized_nut_scenario_path,
-                prod_poll_dep_unrealized_nut_scenario_task)
             (prod_poll_dep_unrealized_nut_scenario_1d_task,
              prod_poll_dep_unrealized_nut_scenario_1d_path) = (
                 schedule_aggregate_to_degree(
@@ -774,9 +717,6 @@ def main():
                 task_name=f'''prod poll dep unrealized: {
                     os.path.basename(
                         prod_total_realized_nut_scenario_path)}''')
-            schedule_upload_blob_and_overviews(
-                task_graph, prod_total_realized_nut_scenario_path,
-                prod_total_realized_nut_scenario_task)
             (prod_total_realized_nut_1d_scenario_task,
              prod_total_realized_nut_1d_scenario_path) = (
                 schedule_aggregate_to_degree(
@@ -808,9 +748,6 @@ def main():
                     os.path.basename(poll_cont_prod_nut_path)}''')
             poll_cont_prod_map[nut_id] = (
                 poll_cont_prod_nut_task, poll_cont_prod_nut_path)
-            schedule_upload_blob_and_overviews(
-                task_graph, poll_cont_prod_nut_path,
-                poll_cont_prod_nut_task)
 
             poll_cont_prod_nut_1d_path = os.path.join(
                 OUTPUT_DIR, f'''poll_cont_prod_{nut_id}_1d_{
@@ -829,9 +766,6 @@ def main():
                     os.path.basename(poll_cont_prod_nut_1d_path)}''')
             poll_cont_1d_prod_map[nut_id] = (
                 poll_cont_prod_nut_task, poll_cont_prod_nut_1d_path)
-            schedule_upload_blob_and_overviews(
-                task_graph, poll_cont_prod_nut_1d_path,
-                poll_cont_prod_nut_task)
 
         poll_cont_prod_avg_path = os.path.join(
             OUTPUT_DIR, f'''poll_cont_prod_avg_10s_{
@@ -846,8 +780,6 @@ def main():
                 x[0] for x in poll_cont_prod_map.values()],
             task_name=f'''avg nat cont poll {
                 os.path.basename(poll_cont_prod_avg_path)}''')
-        schedule_upload_blob_and_overviews(
-            task_graph, poll_cont_prod_avg_path, poll_cont_prod_nut_avg_task)
 
         poll_cont_prod_1d_avg_path = os.path.join(
             OUTPUT_DIR, f'''poll_cont_prod_avg_1d_{
@@ -862,9 +794,6 @@ def main():
                 x[0] for x in poll_cont_1d_prod_map.values()],
             task_name=f'''avg nat cont poll 1d {
                 os.path.basename(poll_cont_prod_1d_avg_path)}''')
-        schedule_upload_blob_and_overviews(
-            task_graph, poll_cont_prod_1d_avg_path,
-            poll_cont_prod_1d_nut_avg_task)
         summary_raster_path_map[f'''poll_cont_prod_avg_1d_{
             landcover_short_suffix}'''] = poll_cont_prod_1d_avg_path
 
@@ -961,8 +890,6 @@ def main():
             target_path_list=[gpw_dens_path],
             task_name=f"""fetch {os.path.basename(gpw_dens_path)}""",
             priority=100)
-        schedule_upload_blob_and_overviews(
-            task_graph, gpw_dens_path, gpw_fetch_task)
 
         gpw_count_path = os.path.join(
             CHURN_DIR, 'gpw_count', f"""{gpw_id[:-4]}count.tif""")
@@ -974,8 +901,6 @@ def main():
             task_name=f"""pop count {os.path.basename(gpw_count_path)}""")
         gpw_task_path_id_map[f'{gpw_id[:-4]}count'] = (
             gpw_count_task, gpw_count_path)
-        schedule_upload_blob_and_overviews(
-            task_graph, gpw_count_path, gpw_count_task)
 
     # we can't schedule a sum until we have the data, so we join here
     gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][0].join()
@@ -992,8 +917,6 @@ def main():
                 gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][0],
                 gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][0]],
             total_cur_pop_10s_path))
-    schedule_upload_blob_and_overviews(
-        task_graph, total_cur_pop_1d_path, total_cur_pop_1d_task)
     gpw_1d_path_map['cur'] = total_cur_pop_1d_path
 
     # calculate 15-65 population gpw count by subtracting total from
@@ -1023,9 +946,6 @@ def main():
             task_name=f'calc gpw 15-65 {gender_id}')
         gpw_task_path_id_map[f'gpw_v4_e_a015_065{gender_id}t_2010_count'] = (
             gpw_15_65f_count_task, gpw_v4_e_a15_65t_2010_count_path)
-        schedule_upload_blob_and_overviews(
-            task_graph, gpw_v4_e_a15_65t_2010_count_path,
-            gpw_15_65f_count_task)
 
     # we need to warp SSP rasters to match the GPW rasters
     # we need to calcualte 15-65 pop by subtracting 0-14 and 65 plus from tot
@@ -1061,8 +981,6 @@ def main():
                 target_path_list=[warp_path],
                 task_name=f'warp to raster {os.path.basename(warp_path)}')
             warp_task_list.append(warp_task)
-            schedule_upload_blob_and_overviews(
-                task_graph, base_path, warp_task)
 
         gpw_path_list = []
         gpw_task_list = []
@@ -1091,8 +1009,6 @@ def main():
             ssp_task_pop_map[(ssp_id, gpw_id)] = (ssp_pop_task, ssp_pop_path)
             gpw_path_list.append(ssp_pop_path)
             gpw_task_list.append(ssp_pop_task)
-            schedule_upload_blob_and_overviews(
-                task_graph, ssp_pop_path, ssp_pop_task)
 
         total_ssp_pop_1d_path = os.path.join(
             OUTPUT_DIR, f'gpw_v4_e_atot_pop_30s_ssp{ssp_id}.tif')
@@ -1100,8 +1016,6 @@ def main():
             schedule_sum_and_aggregate(
                 task_graph, gpw_path_list, numpy.sum, gpw_task_list,
                 total_ssp_pop_1d_path))
-        schedule_upload_blob_and_overviews(
-            task_graph, total_ssp_pop_1d_path, total_ssp_pop_1d_task)
         gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_ssp{ssp_id}'] = (
             total_ssp_pop_1d_path)
 
@@ -1170,9 +1084,6 @@ def main():
             task_name=f"""tot nut requirements {
                 os.path.basename(nut_requirements_path)}""",
             priority=100,)
-        schedule_upload_blob_and_overviews(
-            task_graph, nut_requirements_path,
-            nut_requirements_task)
         tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
             task_graph, nut_requirements_path,
             numpy.sum, nut_requirements_task)
@@ -1223,8 +1134,6 @@ def main():
                 task_name=f"""tot nut requirements {
                     os.path.basename(nut_req_path)}""",
                 priority=100,)
-            schedule_upload_blob_and_overviews(
-                task_graph, nut_req_path, nut_req_task)
             tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
@@ -1276,8 +1185,6 @@ def main():
                 for nut_id in ('en', 'fo', 'va')],
             task_name=f'''poll cont nut avg 1d {
                 os.path.basename(poll_cont_nut_req_avg_1d_path)}''')
-        upload_blob(
-            task_graph, poll_cont_nut_req_avg_1d_path, average_raster_task)
         summary_raster_path_map[
             f'''poll_cont_nut_req_avg_1d_{nut_id}_1d_{scenario_id}'''] = (
                 poll_cont_nut_req_avg_1d_path)
@@ -1433,69 +1340,6 @@ def build_spatial_index(vector_path):
         geom_index.insert(index, shapely_geom.bounds)
 
     return geom_index, geom_list
-
-
-def schedule_upload_blob_and_overviews(
-        task_graph, base_raster_path, base_raster_task):
-    """Build overviews of raster path using taskgraph to schedule.
-
-    Creates an external overview of `base_raster_path` raster in the same
-    directory and filename as the original with a '.ovr' extension.
-
-    Parameters:
-        task_graph (TaskGraph): TaskGraph object to schedule through.
-        base_raster_path (str): path to raster to build overviews on.
-        base_raster_task (Task): task to wait for `base_raster_path` to be
-            created on.
-
-    Returns:
-        None.
-
-    """
-    upload_blob(task_graph, base_raster_path, base_raster_task)
-    target_overview_path = f'{base_raster_path}.ovr'
-    overview_task = task_graph.add_task(
-        func=build_overviews,
-        priority=-100,
-        args=(base_raster_path, 'nearest'),
-        target_path_list=[target_overview_path],
-        dependent_task_list=[base_raster_task],
-        task_name=f'overviews {os.path.basename(base_raster_path)}')
-    upload_blob(task_graph, target_overview_path, overview_task)
-
-
-def upload_blob(task_graph, base_path, dependent_task):
-    """Upload file to blob root.
-
-    Parameters:
-        task_graph (taskgraph.TaskGraph): TaskGraph object to schedule.
-        base_path (str): path to local file to upload. Blob id will end with
-            the base filename of this path.
-        dependent_task (taskgraph.Task): task that creates ``base_path``.
-
-    Returns:
-        None.
-
-    """
-    if not UPLOAD_RESULTS:
-        return
-    # get the relative blob path from the workspace and use Google blob
-    # notation for directories
-    blob_path = (
-        os.path.join(BLOB_ROOT, os.path.relpath(
-            base_path, WORKING_DIR)).replace(os.sep, '/'))
-    file_upload_touch_file = f'''{
-        os.path.join(
-            CHURN_DIR, 'blob_upload_complete',
-            blob_path.replace('/', '_'))}.complete'''
-    __ = task_graph.add_task(
-        func=google_bucket_upload,
-        args=(
-            base_path, GOOGLE_BUCKET_ID, blob_path,
-            GOOGLE_BUCKET_KEY_PATH, file_upload_touch_file),
-        target_path_list=[file_upload_touch_file],
-        dependent_task_list=[dependent_task],
-        task_name=f'google bucket upload {blob_path}')
 
 
 def calculate_total_requirements(
@@ -2436,7 +2280,6 @@ def schedule_aggregate_to_degree(
         target_path_list=[one_degree_raster_path],
         dependent_task_list=[base_raster_task],
         task_name=f'to degree {os.path.basename(one_degree_raster_path)}')
-    upload_blob(task_graph, one_degree_raster_path, one_degree_task)
     return (one_degree_task, one_degree_raster_path)
 
 

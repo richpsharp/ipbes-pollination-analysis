@@ -1215,7 +1215,7 @@ def main():
                 prod_total_realized_1d_task_path_map[
                     (landcover_short_suffix, nutrient_id)])
 
-            task_graph.add(
+            task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
                 args=(
                     ((prod_poll_dep_realized_path, 1),

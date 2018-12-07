@@ -1206,6 +1206,7 @@ def main():
     for _, (_, landcover_short_suffix) in landcover_data.items():
         poll_dep_task_path_list = []
         nat_cont_poll_task_path_list = []
+        prod_poll_dep_unrealized_task_path_list = []
         for nutrient_id in ['en', 'fo', 'va']:
             poll_dep_pot_nut_path = os.path.join(
                 OUTPUT_DIR, f'''poll_dep_pot_{
@@ -1247,13 +1248,16 @@ def main():
                     (landcover_short_suffix, nutrient_id)])
             nat_cont_poll_task_path_list.append(
                 (nat_cont_poll_task, nat_cont_poll_path))
+            prod_poll_dep_unrealized_task_path_list.append(
+                (prod_poll_dep_unrealized_task,
+                    prod_poll_dep_unrealized_path))
         need_path = os.path.join(
             OUTPUT_DIR, f'''need_{landcover_short_suffix}.tif''')
         task_graph.add_task(
             func=pygeoprocessing.raster_calculator,
             args=(
                 [(x[1], 1) for x in poll_dep_task_path_list] +
-                [(_MULT_NODATA, 1)],
+                [(_MULT_NODATA, 'raw')],
                 avg_3_op, need_path, gdal.GDT_Float32, _MULT_NODATA),
             target_path_list=[need_path],
             dependent_task_list=[x[0] for x in poll_dep_task_path_list],
@@ -1265,10 +1269,24 @@ def main():
             func=pygeoprocessing.raster_calculator,
             args=(
                 [(x[1], 1) for x in nat_cont_poll_task_path_list] +
-                [(_MULT_NODATA, 1)],
+                [(_MULT_NODATA, 'raw')],
                 avg_3_op, ncp_path, gdal.GDT_Float32, _MULT_NODATA),
             target_path_list=[ncp_path],
             dependent_task_list=[x[0] for x in nat_cont_poll_task_path_list],
+            task_name=f'ncp_{landcover_short_suffix}')
+
+        un_path = os.path.join(
+            OUTPUT_DIR, f'UN_{landcover_short_suffix}.tif')
+        task_graph.add_task(
+            func=pygeoprocessing.raster_calculator,
+            args=(
+                [(x[1], 1) for x in prod_poll_dep_unrealized_task_path_list] +
+                [(486980, 'raw'), (132654, 'raw'), (3319921, 'raw')] +
+                [(_MULT_NODATA, 'raw')],
+                weighted_avg_3_op, un_path, gdal.GDT_Float32, _MULT_NODATA),
+            target_path_list=[un_path],
+            dependent_task_list=[
+                x[0] for x in prod_poll_dep_unrealized_task_path_list],
             task_name=f'ncp_{landcover_short_suffix}')
 
     task_graph.close()
@@ -2356,6 +2374,24 @@ def avg_3_op(array_1, array_2, array_3, nodata):
         array_1[valid_mask] +
         array_2[valid_mask] +
         array_3[valid_mask]) / 3.
+    return result
+
+
+def weighted_avg_3_op(
+        array_1, array_2, array_3,
+        scalar_1, scalar_2, scalar_3,
+        nodata):
+    """Weighted average 3 arrays. Skip nodata."""
+    result = numpy.empty_like(array_1)
+    result[:] = nodata
+    valid_mask = (
+        ~numpy.isclose(array_1, nodata) &
+        ~numpy.isclose(array_2, nodata) &
+        ~numpy.isclose(array_3, nodata))
+    result[valid_mask] = (
+        array_1[valid_mask]/scalar_1 +
+        array_2[valid_mask]/scalar_2 +
+        array_3[valid_mask]/scalar_3) / 3.
     return result
 
 

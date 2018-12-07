@@ -1203,8 +1203,8 @@ def main():
     for _, (_, landcover_short_suffix) in landcover_data.items():
         for nutrient_id in ['en', 'fo', 'va']:
             poll_dep_pot_nut_cur_path = os.path.join(
-                OUTPUT_DIR, f'poll_dep_pot_{
-                    nutrient_id}_{landcover_short_suffix}_1d.tif')
+                OUTPUT_DIR, f'''poll_dep_pot_{
+                    nutrient_id}_{landcover_short_suffix}_1d.tif''')
 
             (prod_poll_dep_realized_task, prod_poll_dep_realized_path) = (
                 prod_poll_dep_realized_1d_task_path_map[

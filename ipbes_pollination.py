@@ -1201,8 +1201,9 @@ def main():
     # The following came from SQL queries/constructions that becky used to do
     # by hand.
     for _, (_, landcover_short_suffix) in landcover_data.items():
+        poll_dep_task_path_list = []
         for nutrient_id in ['en', 'fo', 'va']:
-            poll_dep_pot_nut_cur_path = os.path.join(
+            poll_dep_pot_nut_path = os.path.join(
                 OUTPUT_DIR, f'''poll_dep_pot_{
                     nutrient_id}_{landcover_short_suffix}_1d.tif''')
 
@@ -1216,7 +1217,7 @@ def main():
                 prod_total_realized_1d_task_path_map[
                     (landcover_short_suffix, nutrient_id)])
 
-            task_graph.add_task(
+            pol_dep_task = task_graph.add_task(
                 func=pygeoprocessing.raster_calculator,
                 args=(
                     ((prod_poll_dep_realized_path, 1),
@@ -1225,15 +1226,28 @@ def main():
                      (prod_poll_dep_unrealized_path, 1),
                      (_MULT_NODATA, 'raw')),
                     sum_num_sum_denom,
-                    poll_dep_pot_nut_cur_path,
+                    poll_dep_pot_nut_path,
                     _MULT_NODATA, gdal.GDT_Float32),
-                target_path_list=[poll_dep_pot_nut_cur_path],
+                target_path_list=[poll_dep_pot_nut_path],
                 dependent_task_list=[
                     prod_poll_dep_realized_task,
                     prod_poll_dep_unrealized_task,
                     prod_total_realized_task],
                 task_name=f'''calculate poll_dep_pot_{
                     nut_id}_{landcover_short_suffix}''')
+            poll_dep_task_path_list.append(
+                (pol_dep_task, poll_dep_pot_nut_path))
+        need_path = os.path.join(
+            OUTPUT_DIR, f'''need_{landcover_short_suffix}.tif''')
+        task_graph.add_task(
+            func=pygeoprocessing.raster_calculator,
+            args=(
+                [(x[1], 1) for x in poll_dep_task_path_list] +
+                [(_MULT_NODATA, 1)],
+                avg_3_op, need_path, gdal.GDT_Float32, _MULT_NODATA),
+            target_path_list=[need_path],
+            dependent_task_list=[x[0] for x in poll_dep_task_path_list],
+            task_name=f'need_{landcover_short_suffix}')
 
     task_graph.close()
     task_graph.join()
@@ -2305,6 +2319,21 @@ def sum_num_sum_denom(
     result[valid_mask] = (
         num1_array[valid_mask] + num2_array[valid_mask]) / (
         denom1_array[valid_mask] + denom2_array[valid_mask] + 1e-9)
+    return result
+
+
+def avg_3_op(array_1, array_2, array_3, nodata):
+    """Average 3 arrays. Skip nodata."""
+    result = numpy.empty_like(array_1)
+    result[:] = nodata
+    valid_mask = (
+        ~numpy.isclose(array_1, nodata) &
+        ~numpy.isclose(array_2, nodata) &
+        ~numpy.isclose(array_3, nodata))
+    result[valid_mask] = (
+        array_1[valid_mask] +
+        array_2[valid_mask] +
+        array_3[valid_mask]) / 3.
     return result
 
 

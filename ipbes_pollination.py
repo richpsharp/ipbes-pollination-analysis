@@ -918,6 +918,7 @@ def main():
     gpw_task_path_id_map['gpw_v4_e_atotpopmt_2010_count'][0].join()
     gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][0].join()
     gpw_1d_path_map = {}
+    gpw_1d_task_map = {}
     total_cur_pop_10s_path = os.path.join(
         OUTPUT_DIR, 'gpw_v4_e_atot_pop_10s_cur.tif')
     (total_cur_pop_1d_task, total_cur_pop_1d_path) = (
@@ -930,6 +931,7 @@ def main():
                 gpw_task_path_id_map['gpw_v4_e_atotpopft_2010_count'][0]],
             total_cur_pop_10s_path))
     gpw_1d_path_map['cur'] = total_cur_pop_1d_path
+    gpw_1d_task_map['cur'] = total_cur_pop_1d_task
 
     # calculate 15-65 population gpw count by subtracting total from
     # 0-14 and 65plus
@@ -1030,6 +1032,8 @@ def main():
                 total_ssp_pop_1d_path))
         gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_ssp{ssp_id}'] = (
             total_ssp_pop_1d_path)
+        gpw_1d_task_map[f'gpw_v4_e_atot_pop_30s_ssp{ssp_id}'] = (
+            total_ssp_pop_1d_task)
 
     # 2)
     # calculate the total nutritional needs per pixel for cur ssp1..5 scenario
@@ -1099,6 +1103,8 @@ def main():
         tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
             task_graph, nut_requirements_path,
             numpy.sum, nut_requirements_task)
+        nut_req_task_path_map[('cur', nut_id)] = (
+            tot_nut_deg_task, tot_nut_deg_path)
         summary_raster_path_map[f'''nut_req_{nut_id}_1d_cur'''] = (
             tot_nut_deg_path)
 
@@ -1149,6 +1155,8 @@ def main():
             tot_nut_deg_task, tot_nut_deg_path = schedule_aggregate_to_degree(
                 task_graph, nut_req_path,
                 numpy.sum, nut_req_task)
+            nut_req_task_path_map[(f'ssp{ssp_id}', nut_id)] = (
+                tot_nut_deg_task, tot_nut_deg_path)
             summary_raster_path_map[
                 f'''nut_req_{nut_id}_1d_ssp{ssp_id}'''] = (
                     tot_nut_deg_path)
@@ -1205,6 +1213,7 @@ def main():
     # by hand.
     # record task/path map indexed by landcover_short_suffix
     un_task_path_map = {}
+    prod_poll_indep_task_path_map = {}
     for _, (_, landcover_short_suffix) in landcover_data.items():
         poll_dep_task_path_list = []
         nat_cont_poll_task_path_list = []
@@ -1253,6 +1262,33 @@ def main():
             prod_poll_dep_unrealized_task_path_list.append(
                 (prod_poll_dep_unrealized_task,
                     prod_poll_dep_unrealized_path))
+
+            # Relevant population is population in grid cells where
+            # pollination-independent production does not already meet or
+            # exceed demand
+            prod_poll_indep_path = os.path.join(
+                OUTPUT_DIR, f'''poll_prod_indep_{
+                    nutrient_id}_{landcover_short_suffix}.tif''')
+            prod_poll_indep_task = task_graph.add_task(
+                func=subtract_2_rasters,
+                args=(
+                    prod_total_realized_1d_task_path_map[
+                        (landcover_short_suffix, nut_id)][1],
+                    prod_poll_dep_realized_1d_task_path_map[
+                        (landcover_short_suffix, nut_id)][1],
+                    prod_poll_indep_path),
+                target_path_list=[prod_poll_indep_path],
+                dependent_task_list=[
+                    prod_total_realized_1d_task_path_map[
+                        (landcover_short_suffix, nut_id)][0],
+                    prod_poll_dep_realized_1d_task_path_map[
+                        (landcover_short_suffix, nut_id)][0]],
+                task_name=f'''calculate poll_prod_indep_{
+                    nutrient_id}_{landcover_short_suffix}''')
+            prod_poll_indep_task_path_map[
+                (landcover_short_suffix, nutrient_id)] = (
+                    prod_poll_indep_task, prod_poll_indep_path)
+
         need_path = os.path.join(
             OUTPUT_DIR, f'''need_{landcover_short_suffix}.tif''')
         task_graph.add_task(
@@ -1315,6 +1351,34 @@ def main():
                 un_task_path_map['cur'][0],
                 un_task_path_map[landcover_short_suffix][0]],
             task_name=f'create cUN_{landcover_short_suffix}')
+
+    for scenario_id in ('cur', 'ssp1', 'ssp3', 'ssp5'):
+        # relevant_population is base pop where there's needs? I'm inferring
+        # this from the SQL queries in the design doc.
+        relevant_pop_path = os.path.join(
+            OUTPUT_DIR, f'relevant_pop_{landcover_short_suffix}.tif')
+
+        task_graph.add_task(
+            func=calc_relevant_pop,
+            args=(
+                gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                prod_poll_indep_task_path_map[(scenario_id, 'en')][1],
+                nut_req_task_path_map[(scenario_id, 'en')][1],
+                prod_poll_indep_task_path_map[(scenario_id, 'fo')][1],
+                nut_req_task_path_map[(scenario_id, 'fo')][1],
+                prod_poll_indep_task_path_map[(scenario_id, 'va')][1],
+                nut_req_task_path_map[(scenario_id, 'va')][1],
+                ),
+            target_path_list=[relevant_pop_path],
+            dependent_task_list=[
+                gpw_1d_task_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                prod_poll_indep_task_path_map[(scenario_id, 'en')][0],
+                nut_req_task_path_map[(scenario_id, 'en')][0],
+                prod_poll_indep_task_path_map[(scenario_id, 'fo')][0],
+                nut_req_task_path_map[(scenario_id, 'fo')][0],
+                prod_poll_indep_task_path_map[(scenario_id, 'va')][0],
+                nut_req_task_path_map[(scenario_id, 'va')][0]],
+            task_name=f'calc_relevant_pop {scenario_id}')
 
     task_graph.close()
     task_graph.join()
@@ -2440,6 +2504,51 @@ def prop_diff_op(array_a, array_b, nodata):
             array_a[valid_mask] + 1e-12)
     return result
 
+
+def calc_relevant_pop(
+        base_pop_path,
+        prod_poll_indep_en_path, nut_req_en_path,
+        prod_poll_indep_fo_path, nut_req_fo_path,
+        prod_poll_indep_va_path, nut_req_va_path,
+        target_raster_path):
+    """This function is meant to duplicate the SQL query that Becky wrote:
+
+    ALTER TABLE relevant_population ADD relevant_pop_cur INTEGER;
+    ALTER TABLE relevant_population ADD relevant_pop_ssp1 INTEGER;
+    ALTER TABLE relevant_population ADD relevant_pop_ssp3 INTEGER;
+    ALTER TABLE relevant_population ADD relevant_pop_ssp5 INTEGER;
+    UPDATE relevant_population SET relevant_pop_cur = cur;
+    UPDATE relevant_population SET relevant_pop_ssp1 = gpw_v4_e_atot_pop_30s_ssp1;
+    UPDATE relevant_population SET relevant_pop_ssp3 = gpw_v4_e_atot_pop_30s_ssp3;
+    UPDATE relevant_population SET relevant_pop_ssp5 = gpw_v4_e_atot_pop_30s_ssp5;
+    UPDATE relevant_population SET relevant_pop_cur = 0 WHERE prod_poll_indep_en_cur > nut_req_en_1d_cur AND prod_poll_indep_fo_cur > nut_req_fo_1d_cur AND prod_poll_indep_va_cur > nut_req_va_1d_cur;
+    UPDATE relevant_population SET relevant_pop_ssp1 = 0 WHERE prod_poll_indep_en_ssp1 > nut_req_en_1d_ssp1 AND prod_poll_indep_fo_ssp1 > nut_req_fo_1d_ssp1 AND prod_poll_indep_va_ssp1 > nut_req_va_1d_ssp1;
+    UPDATE relevant_population SET relevant_pop_ssp3 = 0 WHERE prod_poll_indep_en_ssp3 > nut_req_en_1d_ssp3 AND prod_poll_indep_fo_ssp3 > nut_req_fo_1d_ssp3 AND prod_poll_indep_va_ssp3 > nut_req_va_1d_ssp3;
+    UPDATE relevant_population SET relevant_pop_ssp5 = 0 WHERE prod_poll_indep_en_ssp5 > nut_req_en_1d_ssp5 AND prod_poll_indep_fo_ssp5 > nut_req_fo_1d_ssp5 AND prod_poll_indep_va_ssp5 > nut_req_va_1d_ssp5;
+
+    """
+
+    def relevant_pop_op(
+            base_pop_array,
+            prod_poll_indep_en_array, nut_req_en_array,
+            prod_poll_indep_fo_array, nut_req_fo_array,
+            prod_poll_indep_va_array, nut_req_va_array):
+        result = numpy.copy(base_pop_array)
+        result[
+            (prod_poll_indep_en_array > nut_req_en_array) &
+            (prod_poll_indep_fo_array > nut_req_fo_array) &
+            (prod_poll_indep_va_array > nut_req_va_array)] = 0.0
+        return result
+
+    base_info = pygeoprocessing.get_raster_info(base_pop_path)
+
+    pygeoprocessing.raster_calculator(
+        [(base_pop_path, 1),
+         (prod_poll_indep_en_path, 1), (nut_req_en_path 1),
+         (prod_poll_indep_fo_path, 1), (nut_req_fo_path 1),
+         (prod_poll_indep_va_path, 1), (nut_req_va_path 1)],
+        relevant_pop_op, target_raster_path,
+        base_info['datatype'], base_info['nodata'][0])
 
 if __name__ == '__main__':
     main()

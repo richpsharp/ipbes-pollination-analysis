@@ -1080,6 +1080,7 @@ def main():
         }
 
     prod_poll_dep_1d_task_path_map = {}
+    nut_req_task_path_map = {}
     for nut_id in ('en', 'va', 'fo'):
         # calculate 'cur' needs
         pop_task_path_list, nut_need_list = zip(*[
@@ -1368,8 +1369,34 @@ def main():
                 nut_req_task_path_map[(scenario_id, 'fo')][1],
                 prod_poll_indep_task_path_map[(scenario_id, 'va')][1],
                 nut_req_task_path_map[(scenario_id, 'va')][1],
+                numpy.bitwise_and, relevant_pop_path
                 ),
             target_path_list=[relevant_pop_path],
+            dependent_task_list=[
+                gpw_1d_task_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                prod_poll_indep_task_path_map[(scenario_id, 'en')][0],
+                nut_req_task_path_map[(scenario_id, 'en')][0],
+                prod_poll_indep_task_path_map[(scenario_id, 'fo')][0],
+                nut_req_task_path_map[(scenario_id, 'fo')][0],
+                prod_poll_indep_task_path_map[(scenario_id, 'va')][0],
+                nut_req_task_path_map[(scenario_id, 'va')][0]],
+            task_name=f'calc_relevant_pop {scenario_id}')
+
+        relevant_min_pop_path = os.path.join(
+            OUTPUT_DIR, f'relevant_min_pop_{landcover_short_suffix}.tif')
+        task_graph.add_task(
+            func=calc_relevant_pop,
+            args=(
+                gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                prod_poll_indep_task_path_map[(scenario_id, 'en')][1],
+                nut_req_task_path_map[(scenario_id, 'en')][1],
+                prod_poll_indep_task_path_map[(scenario_id, 'fo')][1],
+                nut_req_task_path_map[(scenario_id, 'fo')][1],
+                prod_poll_indep_task_path_map[(scenario_id, 'va')][1],
+                nut_req_task_path_map[(scenario_id, 'va')][1],
+                numpy.bitwise_or, relevant_min_pop_path
+                ),
+            target_path_list=[relevant_min_pop_path],
             dependent_task_list=[
                 gpw_1d_task_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
                 prod_poll_indep_task_path_map[(scenario_id, 'en')][0],
@@ -2510,7 +2537,7 @@ def calc_relevant_pop(
         prod_poll_indep_en_path, nut_req_en_path,
         prod_poll_indep_fo_path, nut_req_fo_path,
         prod_poll_indep_va_path, nut_req_va_path,
-        target_raster_path):
+        logic_ufunc, target_raster_path):
     """This function is meant to duplicate the SQL query that Becky wrote:
 
     ALTER TABLE relevant_population ADD relevant_pop_cur INTEGER;
@@ -2535,9 +2562,11 @@ def calc_relevant_pop(
             prod_poll_indep_va_array, nut_req_va_array):
         result = numpy.copy(base_pop_array)
         result[
-            (prod_poll_indep_en_array > nut_req_en_array) &
-            (prod_poll_indep_fo_array > nut_req_fo_array) &
-            (prod_poll_indep_va_array > nut_req_va_array)] = 0.0
+            logic_ufunc(
+                (prod_poll_indep_en_array > nut_req_en_array),
+                logic_ufunc(
+                    (prod_poll_indep_fo_array > nut_req_fo_array),
+                    (prod_poll_indep_va_array > nut_req_va_array)))] = 0.0
         return result
 
     base_info = pygeoprocessing.get_raster_info(base_pop_path)

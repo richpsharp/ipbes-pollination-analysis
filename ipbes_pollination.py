@@ -2544,9 +2544,9 @@ def calc_relevant_pop(
 
     pygeoprocessing.raster_calculator(
         [(base_pop_path, 1),
-         (prod_poll_indep_en_path, 1), (nut_req_en_path 1),
-         (prod_poll_indep_fo_path, 1), (nut_req_fo_path 1),
-         (prod_poll_indep_va_path, 1), (nut_req_va_path 1)],
+         (prod_poll_indep_en_path, 1), (nut_req_en_path, 1),
+         (prod_poll_indep_fo_path, 1), (nut_req_fo_path, 1),
+         (prod_poll_indep_va_path, 1), (nut_req_va_path, 1)],
         relevant_pop_op, target_raster_path,
         base_info['datatype'], base_info['nodata'][0])
 

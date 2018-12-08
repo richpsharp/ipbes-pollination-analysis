@@ -1203,6 +1203,8 @@ def main():
 
     # The following came from SQL queries/constructions that becky used to do
     # by hand.
+    # record task/path map indexed by landcover_short_suffix
+    un_task_path_map = {}
     for _, (_, landcover_short_suffix) in landcover_data.items():
         poll_dep_task_path_list = []
         nat_cont_poll_task_path_list = []
@@ -1273,11 +1275,17 @@ def main():
                 avg_3_op, ncp_path, gdal.GDT_Float32, _MULT_NODATA),
             target_path_list=[ncp_path],
             dependent_task_list=[x[0] for x in nat_cont_poll_task_path_list],
-            task_name=f'ncp_{landcover_short_suffix}')
+            task_name=f'create ncp_{landcover_short_suffix}')
 
+        # "Unmet need" is unrealized production, prod_poll_dep_unrealized_
+        # averaged across all three nutrients.  In order to average it you
+        # first need to normalize: Divide unrealized_va by 486980,
+        # unrealized_fo by 132654, and unrealized_en by 3319921; then average.
+        # These numbers are the average annual nutrient requirements (in the
+        # correct units, that correspond to the production units).
         un_path = os.path.join(
             OUTPUT_DIR, f'UN_{landcover_short_suffix}.tif')
-        task_graph.add_task(
+        un_task = task_graph.add_task(
             func=pygeoprocessing.raster_calculator,
             args=(
                 [(x[1], 1) for x in prod_poll_dep_unrealized_task_path_list] +
@@ -1288,6 +1296,25 @@ def main():
             dependent_task_list=[
                 x[0] for x in prod_poll_dep_unrealized_task_path_list],
             task_name=f'ncp_{landcover_short_suffix}')
+        un_task_path_map[landcover_short_suffix] = (un_task, un_path)
+
+    for _, (_, landcover_short_suffix) in landcover_data.items():
+        cun_path = os.path.join(
+            OUTPUT_DIR, f'cUN_{landcover_short_suffix}.tif')
+
+        cun_task = task_graph.add_task(
+            func=pygeoprocessing.raster_calculator,
+            args=(
+                ((un_task_path_map[landcover_short_suffix][1], 1),
+                 (un_task_path_map['cur'][1], 1),
+                 (_MULT_NODATA, 'raw')),
+                prop_diff_op,
+                cun_path, gdal.GDT_Float32, _MULT_NODATA),
+            target_path_list=[cun_path],
+            dependent_task_list=[
+                un_task_path_map['cur'][0],
+                un_task_path_map[landcover_short_suffix][0]],
+            task_name=f'create cUN_{landcover_short_suffix}')
 
     task_graph.close()
     task_graph.join()
@@ -2395,8 +2422,23 @@ def weighted_avg_3_op(
     return result
 
 
-def count_ge_one(x):
-    return numpy.count_nonzero(x >= 1)
+def count_ge_one(array):
+    """Return count of elements >= 1."""
+    return numpy.count_nonzero(array >= 1)
+
+
+def prop_diff_op(array_a, array_b, nodata):
+    """Calculate prop change from a to b."""
+    result = numpy.empty_like(array_a)
+    result[:] = nodata
+    valid_mask = (
+        ~numpy.isclose(array_a, nodata) &
+        ~numpy.isclose(array_b, nodata))
+    # the 1e-12 is to prevent a divide by 0 error
+    result[valid_mask] = (
+        array_b[valid_mask] - array_a[valid_mask]) / (
+            array_a[valid_mask] + 1e-12)
+    return result
 
 
 if __name__ == '__main__':

@@ -1358,11 +1358,14 @@ def main():
         # this from the SQL queries in the design doc.
         relevant_pop_path = os.path.join(
             OUTPUT_DIR, f'relevant_pop_{landcover_short_suffix}.tif')
-
+        if scenario_id == 'cur':
+            gpw_scenario_id = 'cur'
+        else:
+            gpw_scenario_id = f'gpw_v4_e_atot_pop_30s_{scenario_id}'
         task_graph.add_task(
             func=calc_relevant_pop,
             args=(
-                gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                gpw_1d_path_map[gpw_scenario_id],
                 prod_poll_indep_task_path_map[(scenario_id, 'en')][1],
                 nut_req_task_path_map[(scenario_id, 'en')][1],
                 prod_poll_indep_task_path_map[(scenario_id, 'fo')][1],
@@ -1373,7 +1376,7 @@ def main():
                 ),
             target_path_list=[relevant_pop_path],
             dependent_task_list=[
-                gpw_1d_task_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                gpw_1d_task_map[gpw_scenario_id],
                 prod_poll_indep_task_path_map[(scenario_id, 'en')][0],
                 nut_req_task_path_map[(scenario_id, 'en')][0],
                 prod_poll_indep_task_path_map[(scenario_id, 'fo')][0],
@@ -1387,7 +1390,7 @@ def main():
         task_graph.add_task(
             func=calc_relevant_pop,
             args=(
-                gpw_1d_path_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                gpw_1d_path_map[gpw_scenario_id],
                 prod_poll_indep_task_path_map[(scenario_id, 'en')][1],
                 nut_req_task_path_map[(scenario_id, 'en')][1],
                 prod_poll_indep_task_path_map[(scenario_id, 'fo')][1],
@@ -1398,7 +1401,7 @@ def main():
                 ),
             target_path_list=[relevant_min_pop_path],
             dependent_task_list=[
-                gpw_1d_task_map[f'gpw_v4_e_atot_pop_30s_{scenario_id}'],
+                gpw_1d_task_map[gpw_scenario_id],
                 prod_poll_indep_task_path_map[(scenario_id, 'en')][0],
                 nut_req_task_path_map[(scenario_id, 'en')][0],
                 prod_poll_indep_task_path_map[(scenario_id, 'fo')][0],

@@ -14,7 +14,6 @@ import os
 import re
 import logging
 import itertools
-import multiprocessing
 import tempfile
 
 import rtree
@@ -368,6 +367,7 @@ def main():
     prod_poll_dep_realized_1d_task_path_map = {}
     prod_poll_dep_unrealized_1d_task_path_map = {}
     prod_total_realized_1d_task_path_map = {}
+    nat_cont_poll_1d_task_path_map = {}
     # mask landcover into agriculture and pollinator habitat
     for landcover_key, (landcover_url, landcover_short_suffix) in (
             landcover_data.items()):
@@ -660,7 +660,7 @@ def main():
                 f'''nat_cont_poll_{
                     nut_id}_1d_{landcover_short_suffix}'''] = (
                         nat_cont_poll_nut_1d_path)
-            prod_poll_dep_realized_1d_task_path_map[
+            nat_cont_poll_1d_task_path_map[
                 (landcover_short_suffix, nut_id)] = (
                     nat_cont_poll_nut_1d_task, nat_cont_poll_nut_1d_path)
 
@@ -1256,7 +1256,7 @@ def main():
                 (pol_dep_task, poll_dep_pot_nut_path))
 
             (nat_cont_poll_task, nat_cont_poll_path) = (
-                prod_poll_dep_realized_1d_task_path_map[
+                nat_cont_poll_1d_task_path_map[
                     (landcover_short_suffix, nutrient_id)])
             nat_cont_poll_task_path_list.append(
                 (nat_cont_poll_task, nat_cont_poll_path))

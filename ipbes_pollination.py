@@ -6,7 +6,7 @@ Pollination analysis for IPBES.
 """
 import subprocess
 import shutil
-import base64
+import multiprocessing
 import sys
 import zipfile
 import time
@@ -75,7 +75,7 @@ except IndexError:
     raise RuntimeError("Expected command line argument of path to bucket key")
 
 NODATA = -9999
-N_WORKERS = -1#max(1, multiprocessing.cpu_count())
+N_WORKERS = max(1, multiprocessing.cpu_count())
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 BLOB_ROOT = f'''ipbes_pollination_result'''

@@ -2573,15 +2573,34 @@ def calc_relevant_pop(
                     (prod_poll_indep_va_array > nut_req_va_array)))] = 0.0
         return result
 
+    temp_working_dir = tempfile.mkdtemp(
+        dir=os.path.dirname(target_raster_path))
+
+    base_raster_path_list = [
+        base_pop_path,
+        prod_poll_indep_en_path, nut_req_en_path,
+        prod_poll_indep_fo_path, nut_req_fo_path,
+        prod_poll_indep_va_path, nut_req_va_path]
+
+    aligned_raster_path_list = [
+        os.path.join(
+            temp_working_dir, '%s_aligned%s' %
+            os.path.splitext(os.path.basename(path)))
+        for path in base_raster_path_list]
+
     base_info = pygeoprocessing.get_raster_info(base_pop_path)
+    pygeoprocessing.align_and_resize_raster_stack(
+        base_raster_path_list, aligned_raster_path_list,
+        ['near']*len(base_raster_path_list), base_info['pixel_size'],
+        'intersection')
 
     pygeoprocessing.raster_calculator(
-        [(base_pop_path, 1),
-         (prod_poll_indep_en_path, 1), (nut_req_en_path, 1),
-         (prod_poll_indep_fo_path, 1), (nut_req_fo_path, 1),
-         (prod_poll_indep_va_path, 1), (nut_req_va_path, 1)],
+        [(path, 1) for path in aligned_raster_path_list],
         relevant_pop_op, target_raster_path,
         base_info['datatype'], base_info['nodata'][0])
+
+    shutil.rmtree(temp_working_dir, ignore_errors=True)
+
 
 if __name__ == '__main__':
     main()

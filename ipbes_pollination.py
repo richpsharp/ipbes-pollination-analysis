@@ -1245,7 +1245,7 @@ def main():
                      (_MULT_NODATA, 'raw')),
                     sum_num_sum_denom,
                     poll_dep_pot_nut_path,
-                    _MULT_NODATA, gdal.GDT_Float32),
+                    gdal.GDT_Float32, _MULT_NODATA),
                 target_path_list=[poll_dep_pot_nut_path],
                 dependent_task_list=[
                     prod_poll_dep_realized_task,

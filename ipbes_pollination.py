@@ -1358,7 +1358,8 @@ def main():
         # relevant_population is base pop where there's needs? I'm inferring
         # this from the SQL queries in the design doc.
         relevant_pop_path = os.path.join(
-            OUTPUT_DIR, f'relevant_pop_{landcover_short_suffix}.tif')
+            OUTPUT_DIR,
+            f'relevant_pop_{landcover_short_suffix}_{scenario_id}.tif')
         if scenario_id == 'cur':
             gpw_scenario_id = 'cur'
         else:
@@ -1387,7 +1388,8 @@ def main():
             task_name=f'calc_relevant_pop {scenario_id}')
 
         relevant_min_pop_path = os.path.join(
-            OUTPUT_DIR, f'relevant_min_pop_{landcover_short_suffix}.tif')
+            OUTPUT_DIR,
+            f'relevant_min_pop_{landcover_short_suffix}_{scenario_id}.tif')
         task_graph.add_task(
             func=calc_relevant_pop,
             args=(

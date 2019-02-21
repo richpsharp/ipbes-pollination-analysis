@@ -1416,7 +1416,6 @@ def main():
     task_graph.close()
     task_graph.join()
     LOGGER.error("don't forget to not return here okay?")
-    return
     countries_myregions_df = pandas.read_csv(
         'countries_myregions_final_md5_7e35a0775335f9aaf9a28adbac0b8895.csv',
         usecols=['country', 'myregions'], sep=',')

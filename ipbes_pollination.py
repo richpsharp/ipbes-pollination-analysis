@@ -202,7 +202,6 @@ def main():
         task_name=f'unzip hunger_basedata_zip')
 
     landcover_data = {
-        commenting out all these just so we can run ESA only
         'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
             'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
             '/GLOBIO4_LU_10sec_2050_SSP5_RCP85_'

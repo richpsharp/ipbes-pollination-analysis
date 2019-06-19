@@ -202,43 +202,43 @@ def main():
         task_name=f'unzip hunger_basedata_zip')
 
     landcover_data = {
-        # commenting out all these just so we can run ESA only
-        # 'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/GLOBIO4_LU_10sec_2050_SSP5_RCP85_'
-        #     'md5_1b3cc1ce6d0ff14d66da676ef194f130.tif', 'ssp5'),
-        # 'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_'
-        #     '803166420f51e5ef7dcaa970faa98173.tif', 'ssp1'),
-        # 'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_'
-        #     'e77077a3220a36f7f0441bbd0f7f14ab.tif', 'ssp3'),
-        # 'Globio4_landuse_10sec_1850': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/Globio4_landuse_10sec_1850_md5_'
-        #     '0b7fcb4b180d46b4fc2245beee76d6b9.tif', '1850'),
-        # 'Globio4_landuse_10sec_2015': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/Globio4_landuse_10sec_2015_md5_'
-        #     '939a57c2437cd09bd5a9eb472b9bd781.tif', 'cur'),
-        # 'Globio4_landuse_10sec_1980': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/Globio4_landuse_10sec_1980_md5_'
-        #     'f6384eac7579318524439df9530ca1f4.tif', '1980'),
-        # 'Globio4_landuse_10sec_1945': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/Globio4_landuse_10sec_1945_md5_'
-        #     '52c7b4c38c26defefa61132fd25c5584.tif', '1945'),
-        # 'Globio4_landuse_10sec_1910': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/Globio4_landuse_10sec_1910_md5_'
-        #     'e7da8fa29db305ff63c99fed7ca8d5e2.tif', '1910'),
-        # 'Globio4_landuse_10sec_1900': (
-        #     'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
-        #     '/Globio4_landuse_10sec_1900_md5_'
-        #     'f5db818a5b16799bf2cb627e574120a4.tif', '1900'),
+        commenting out all these just so we can run ESA only
+        'GLOBIO4_LU_10sec_2050_SSP5_RCP85': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP5_RCP85_'
+            'md5_1b3cc1ce6d0ff14d66da676ef194f130.tif', 'ssp5'),
+        'GLOBIO4_LU_10sec_2050_SSP1_RCP26': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP1_RCP26_md5_'
+            '803166420f51e5ef7dcaa970faa98173.tif', 'ssp1'),
+        'GLOBIO4_LU_10sec_2050_SSP3_RCP70': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/GLOBIO4_LU_10sec_2050_SSP3_RCP70_md5_'
+            'e77077a3220a36f7f0441bbd0f7f14ab.tif', 'ssp3'),
+        'Globio4_landuse_10sec_1850': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1850_md5_'
+            '0b7fcb4b180d46b4fc2245beee76d6b9.tif', '1850'),
+        'Globio4_landuse_10sec_2015': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_2015_md5_'
+            '939a57c2437cd09bd5a9eb472b9bd781.tif', 'cur'),
+        'Globio4_landuse_10sec_1980': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1980_md5_'
+            'f6384eac7579318524439df9530ca1f4.tif', '1980'),
+        'Globio4_landuse_10sec_1945': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1945_md5_'
+            '52c7b4c38c26defefa61132fd25c5584.tif', '1945'),
+        'Globio4_landuse_10sec_1910': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1910_md5_'
+            'e7da8fa29db305ff63c99fed7ca8d5e2.tif', '1910'),
+        'Globio4_landuse_10sec_1900': (
+            'https://storage.cloud.google.com/ecoshard-root/globio_landcover'
+            '/Globio4_landuse_10sec_1900_md5_'
+            'f5db818a5b16799bf2cb627e574120a4.tif', '1900'),
         'ESACCI_LC_L4_LCSS': ('https://storage.cloud.google.com/ipbes-ndr-ecoshard-data/ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_md5_1254d25f937e6d9bdee5779d377c5aa4.tif', 'ESACCI_LC_L4_LCSS')
         }
 

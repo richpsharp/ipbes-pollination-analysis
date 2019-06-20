@@ -75,7 +75,7 @@ except IndexError:
     raise RuntimeError("Expected command line argument of path to bucket key")
 
 NODATA = -9999
-N_WORKERS = max(1, multiprocessing.cpu_count()//2)
+N_WORKERS = max(1, multiprocessing.cpu_count())
 
 GOOGLE_BUCKET_ID = 'ipbes-pollination-result'
 BLOB_ROOT = f'''ipbes_pollination_result'''
